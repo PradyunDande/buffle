@@ -39,18 +39,18 @@ export function resetMotion(t) {
 
 function loadSettings() {
   const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, swapped: false, name: "" };
-  try { return { ...defaults, ...JSON.parse(localStorage.getItem("baffle-settings") || "{}") }; }
+  try { return { ...defaults, ...JSON.parse(localStorage.getItem("buffle-settings") || "{}") }; }
   catch { return defaults; }
 }
 export function saveSettings() {
-  try { localStorage.setItem("baffle-settings", JSON.stringify(settings)); } catch { /* Storage is optional. */ }
+  try { localStorage.setItem("buffle-settings", JSON.stringify(settings)); } catch { /* Storage is optional. */ }
 }
 function loadProgress() {
-  try { return { cleared: 0, ...JSON.parse(localStorage.getItem("baffle-progress") || "{}") }; }
+  try { return { cleared: 0, ...JSON.parse(localStorage.getItem("buffle-progress") || "{}") }; }
   catch { return { cleared: 0 }; }
 }
 export function saveProgress() {
-  try { localStorage.setItem("baffle-progress", JSON.stringify(progress)); } catch { /* Storage is optional. */ }
+  try { localStorage.setItem("buffle-progress", JSON.stringify(progress)); } catch { /* Storage is optional. */ }
 }
 
 export function number(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }

@@ -3,7 +3,7 @@
    video call per direction between every pair of players, so everyone sees
    everyone. PeerJS's public server is used only to find peers. */
 const PEERJS_URL = "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js";
-const PREFIX = "baffle-party-";
+const PREFIX = "buffle-party-";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const MAX_PLAYERS = 6;
 let loading = null;

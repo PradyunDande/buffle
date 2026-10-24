@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 .vercel/
+.vscode/
 
 # Logs
 npm-debug.log*
