@@ -1,0 +1,13 @@
+# OS files
+.DS_Store
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+.vercel/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*

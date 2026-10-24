@@ -1,4 +1,4 @@
-/* Baffle: a single-page, client-side fairy-tale exercise brawler. Wires up the page. */
+/* Buffle: a single-page, client-side fairy-tale exercise brawler. Wires up the page. */
 
 import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
 import { beginCountdown, recordRep, showBosses, startGame, stopRound } from "./game.js";
