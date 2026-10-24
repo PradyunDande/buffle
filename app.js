@@ -52,10 +52,16 @@
     combo: 0, bestCombo: 0, frenzyUntil: 0, cleanEvents: 0, repEvents: 0,
     lastEvents: [null, null], endAt: 0, duration: 0, lastTickAt: 0,
     bossHp: 0, bossMax: 0, phase: 0, hearts: HEARTS, attack: null, nextAttackAt: 0, parries: 0,
-    scores: [0, 0],
+    scores: [0, 0], cameraToken: 0, cameraBusy: false,
+    party: null, roster: [], myIndex: 0, partyReps: [], remoteStreams: new Map(),
     audio: null, toastTimer: 0
   };
-  const solo = () => state.mode === "story";
+  // In a remote party each device tracks one person; the host keeps score for everyone.
+  const solo = () => state.mode === "story" || state.mode === "party";
+  const teamMode = () => state.mode === "coop" || state.mode === "party";
+  const isHost = () => state.mode === "party" && Boolean(state.party?.isHost);
+  const isGuest = () => state.mode === "party" && Boolean(state.party) && !state.party.isHost;
+  const playerCount = () => state.mode === "party" ? Math.max(1, state.roster.length) : state.mode === "coop" ? 2 : 1;
   const boss = () => BOSSES[state.bossIndex];
 
   function newTracker() {
@@ -71,7 +77,7 @@
   }
 
   function loadSettings() {
-    const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, swapped: false };
+    const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, swapped: false, name: "" };
     try { return { ...defaults, ...JSON.parse(localStorage.getItem("baffle-settings") || "{}") }; }
     catch { return defaults; }
   }
@@ -160,23 +166,33 @@
     layer.append(bat);
     setTimeout(() => bat.remove(), 1400);
   }
-  function flashAndShake(kind, element = $("stage")) {
-    if (!settings.effects) return;
+  function flashAndShake(kind, id = "stage") {
+    const element = $(id);
+    if (!settings.effects || !element) return;
     element.classList.remove(kind);
     void element.offsetWidth;
     element.classList.add(kind);
     setTimeout(() => element.classList.remove(kind), 600);
   }
   function floatText(index, text, className = "") {
-    const stage = $("stage");
+    const party = state.mode === "party";
+    const own = !party || index === state.myIndex;
+    const stage = own ? $("stage") : tileFor(index) || $("stage");
     const item = document.createElement("span");
-    const player = state.trackers[index];
+    // On this device's camera the text follows the person; on other tiles it is centred.
+    const player = own ? state.trackers[party ? 0 : index] : null;
     item.className = `floating ${className}`;
     item.textContent = text;
-    item.style.left = `${((player.x ?? (index ? .7 : .25)) * 100).toFixed(1)}%`;
-    item.style.top = `${Math.max(10, ((player.y ?? .5) * 100) - 20).toFixed(1)}%`;
+    item.style.left = `${((player?.x ?? (party ? .5 : index ? .7 : .25)) * 100).toFixed(1)}%`;
+    item.style.top = `${Math.max(10, ((player?.y ?? .5) * 100) - 20).toFixed(1)}%`;
     stage.append(item);
     setTimeout(() => item.remove(), 1250);
+  }
+  // Game effects run here and, on a party host, on every guest's screen too.
+  const EFFECTS = { floatText, showAlert, clearAlert, confetti, flashAndShake, sound };
+  function fx(name, ...args) {
+    EFFECTS[name](...args);
+    if (isHost()) state.party.broadcast({ t: "fx", name, args });
   }
 
   function renderSprite(container, b) {
@@ -214,8 +230,11 @@
       $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
       $("boss-sprite").classList.toggle("winding", Boolean(state.attack));
     }
-    $("p1-reps").textContent = number(state.trackers[0].reps);
-    $("p2-reps").textContent = number(state.trackers[1].reps);
+    if (state.mode === "party") updateTileNames();
+    else {
+      $("p1-reps").textContent = number(state.trackers[0].reps);
+      $("p2-reps").textContent = number(state.trackers[1].reps);
+    }
     $("frenzy-banner").hidden = duel || !isFrenzy();
   }
 
@@ -223,17 +242,23 @@
     if (state.status !== "playing") return;
     const now = performance.now();
     const player = state.trackers[index];
-    if (fromCamera && now - player.lastRepAt < 400) return;
+    if (!player || (fromCamera && now - player.lastRepAt < 400)) return;
     player.lastRepAt = now;
+    if (isGuest()) {
+      // The host keeps score; a guest only reports its own reps.
+      if (quality === "bad") flashAndShake("shake");
+      state.party.send({ t: "rep", quality, amount });
+      return;
+    }
     player.lastEventAt = now;
     player.reps += amount;
     player.form = quality.toUpperCase();
     state.repEvents++;
     if (quality === "clean") state.cleanEvents++;
-    if (quality === "bad") flashAndShake("shake");
-    sound("hit");
+    if (quality === "bad" && (state.mode !== "party" || index === state.myIndex)) flashAndShake("shake");
 
     if (state.mode === "duel") {
+      sound("hit");
       // A run of clean reps raises that player's multiplier; any other rep resets it.
       player.streak = quality === "clean" ? player.streak + 1 : 0;
       const earned = points[quality] * streakMultiplier(player.streak);
@@ -247,37 +272,39 @@
     // Rep damage uses the combo that was active as this rep began.
     const earned = points[quality] * comboMultiplier() * (isFrenzy(now) ? 2 : 1);
     let damage = earned;
-    floatText(index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
+    fx("sound", "hit");
+    fx("floatText", index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
     if (state.attack) {
       state.attack = null;
       state.parries++;
       state.nextAttackAt = now + boss().attackEvery;
       damage += 2;
-      floatText(index, "PARRY! +2", "sync");
-      showAlert("PARRIED!", "good", 1200);
+      fx("floatText", index, "PARRY! +2", "sync");
+      fx("showAlert", "PARRIED!", "good", 1200);
     }
 
-    const other = state.lastEvents[1 - index];
+    // A rep syncs with any other player's unpaired rep from the last 700ms.
+    const partner = state.lastEvents.find((e, i) => i !== index && e && !e.paired && now - e.at <= 700);
     const event = { at: now, paired: false };
     state.lastEvents[index] = event;
-    if (state.mode === "coop" && other && !other.paired && now - other.at <= 700) {
-      event.paired = other.paired = true;
+    if (teamMode() && partner) {
+      event.paired = partner.paired = true;
       state.combo++;
       state.bestCombo = Math.max(state.bestCombo, state.combo);
       if (state.combo % 5 === 0) state.frenzyUntil = now + 5000;
       const bonus = 3 * (isFrenzy(now) ? 2 : 1);
       damage += bonus;
-      floatText(index, `SYNC! +${bonus}`, "sync");
-      confetti();
-      flashAndShake("flash");
-      sound("sync");
+      fx("floatText", index, `SYNC! +${bonus}`, "sync");
+      fx("confetti");
+      fx("flashAndShake", "flash");
+      fx("sound", "sync");
     }
     hitBoss(damage);
   }
 
   function hitBoss(amount) {
     state.bossHp = Math.max(0, scoreText(state.bossHp - amount));
-    flashAndShake("hit", $("boss-sprite"));
+    fx("flashAndShake", "hit", "boss-sprite");
     updateHud();
     if (state.bossHp <= 0) { finishRound(true); return; }
     const count = boss().phases.length;
@@ -292,11 +319,11 @@
     state.exercise = boss().phases[index];
     state.status = "transition";
     state.attack = null;
-    state.lastEvents = [null, null];
+    state.lastEvents = state.lastEvents.map(() => null);
     state.trackers.forEach(resetMotion);
     $("pose-tip").textContent = TIPS[state.exercise];
-    showAlert(`PHASE ${index + 1} · ${NAMES[state.exercise].toUpperCase()}!`, "phase");
-    sound("warn");
+    fx("showAlert", `PHASE ${index + 1} · ${NAMES[state.exercise].toUpperCase()}!`, "phase");
+    fx("sound", "warn");
     updateHud();
     clearTimeout(state.transitionTimer);
     state.transitionTimer = setTimeout(() => {
@@ -305,7 +332,7 @@
       state.status = "playing";
       state.nextAttackAt = now + boss().attackEvery;
       state.trackers.forEach((t) => { t.lastEventAt = now; });
-      clearAlert();
+      fx("clearAlert");
     }, ["plank", "pushups"].includes(state.exercise) ? 5000 : 3000);
   }
 
@@ -313,33 +340,34 @@
     if (!state.attack) {
       if (now < state.nextAttackAt) return;
       state.attack = { until: now + PARRY_WINDOW };
-      showAlert(`${boss().attack}! Keep moving to parry!`, "danger");
-      sound("warn");
+      fx("showAlert", `${boss().attack}! Keep moving to parry!`, "danger");
+      fx("sound", "warn");
       return;
     }
     if (now < state.attack.until) return;
     state.attack = null;
     state.hearts--;
     state.nextAttackAt = now + boss().attackEvery;
-    showAlert(state.hearts ? `OUCH! ${state.hearts} heart${state.hearts === 1 ? "" : "s"} left` : "OUCH!", "danger", 1400);
-    flashAndShake("shake");
-    sound("hurt");
+    fx("showAlert", state.hearts ? `OUCH! ${state.hearts} heart${state.hearts === 1 ? "" : "s"} left` : "OUCH!", "danger", 1400);
+    fx("flashAndShake", "shake");
+    fx("sound", "hurt");
     if (state.hearts <= 0) finishRound(false);
   }
 
   function resetRound() {
-    const duel = state.mode === "duel";
-    state.trackers = [newTracker(), newTracker()];
+    const duel = state.mode === "duel", party = state.mode === "party";
+    // A party host keeps one tracker per player, in roster order; it is player 0.
+    state.trackers = Array.from({ length: party ? playerCount() : 2 }, newTracker);
     state.combo = 0; state.bestCombo = 0;
     state.frenzyUntil = 0; state.cleanEvents = 0; state.repEvents = 0;
-    state.lastEvents = [null, null]; state.endAt = 0;
+    state.lastEvents = state.trackers.map(() => null); state.endAt = 0;
     state.scores = [0, 0]; state.phase = 0; state.hearts = HEARTS;
-    state.attack = null; state.parries = 0;
+    state.attack = null; state.parries = 0; state.partyReps = [];
     if (duel) state.duration = DUEL_TIME;
     else {
       const b = boss();
       state.exercise = b.phases[0];
-      state.bossMax = b.hp * (state.mode === "coop" ? 2 : 1);
+      state.bossMax = b.hp * playerCount();
       state.bossHp = state.bossMax;
       state.duration = b.time * 1000;
       renderSprite($("boss-sprite"), b);
@@ -353,18 +381,24 @@
     state.lastVideoTime = -1;
     state.lastFrameAt = 0;
     $("time-value").textContent = String(state.duration / 1000);
-    $("mode-label").textContent = state.mode === "story" ? `STORY · CHAPTER ${ROMAN[state.bossIndex]}` : state.mode === "coop" ? "CO-OP BOSS" : "1V1 DUEL";
+    $("mode-label").textContent = state.mode === "story" ? `STORY · CHAPTER ${ROMAN[state.bossIndex]}`
+      : party ? `REMOTE PARTY · ${playerCount()} PLAYER${playerCount() === 1 ? "" : "S"}` : state.mode === "coop" ? "CO-OP BOSS" : "1V1 DUEL";
     $("game-title").textContent = duel ? NAMES[state.exercise] : boss().name;
+    $("lobby").hidden = true;
+    $("timer").hidden = false;
     $("arena").hidden = duel;
     $("duel-hud").hidden = !duel;
-    $("combo-box").hidden = state.mode !== "coop";
+    $("combo-box").hidden = !teamMode();
+    $("players-bar").hidden = party;
     $("shared-mark").textContent = duel ? "✦ VERSUS ✦" : "✦ TEAM UP ✦";
     $("p2-score").hidden = solo();
     $("p2-label").hidden = solo();
     $("pose-tip").textContent = TIPS[state.exercise];
     $("waiting").hidden = true;
-    $("camera-placeholder").hidden = false;
-    $("camera-placeholder").textContent = "Preparing the camera…";
+    if (!state.stream) {
+      $("camera-placeholder").hidden = false;
+      $("camera-placeholder").textContent = state.keyboardOnly ? "Hotkey mode — press 1 or Q" : "Preparing the camera…";
+    }
     $("game-error").hidden = true;
     $("countdown").hidden = true;
     clearAlert();
@@ -373,22 +407,29 @@
   }
 
   function stopMedia() {
+    state.cameraToken++;
+    state.cameraBusy = false;
     if (state.raf) cancelAnimationFrame(state.raf);
     state.raf = 0;
     if (state.stream) state.stream.getTracks().forEach((track) => track.stop());
     state.stream = null;
+    state.party?.setStream(null);
     $("camera").srcObject = null;
     $("skeleton").getContext("2d").clearRect(0, 0, $("skeleton").width, $("skeleton").height);
   }
+  // A party keeps its cameras running between rounds; leaving the party stops them.
   function stopRound() {
     state.session++;
     clearInterval(state.tick);
     clearInterval(state.countdownTimer);
     clearTimeout(state.transitionTimer);
     state.tick = state.countdownTimer = state.transitionTimer = 0;
-    stopMedia();
+    if (state.mode !== "party") stopMedia();
     clearAlert();
     state.status = "idle";
+  }
+  function ensurePoseLoop() {
+    if (state.stream && state.landmarker && !state.raf) state.raf = requestAnimationFrame(poseLoop);
   }
 
   async function loadModel() {
@@ -409,26 +450,34 @@
     return state.modelPromise;
   }
 
-  async function prepareCamera(session) {
+  // Stopping the media invalidates the token, which cancels a camera that is still starting.
+  async function prepareCamera() {
+    const token = ++state.cameraToken;
+    const current = () => token === state.cameraToken;
+    state.cameraBusy = true;
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera access requires localhost or HTTPS and a supported browser.");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } });
-      if (session !== state.session || state.keyboardOnly || state.status !== "loading") { stream.getTracks().forEach((track) => track.stop()); return; }
+      // Party cameras are also streamed to every player, so they use a lighter resolution.
+      const size = state.mode === "party" ? { width: { ideal: 640 }, height: { ideal: 480 } } : { width: { ideal: 1280 }, height: { ideal: 720 } };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "user", ...size } });
+      if (!current()) { stream.getTracks().forEach((track) => track.stop()); return; }
       state.stream = stream;
+      state.party?.setStream(stream);
       const video = $("camera");
       video.srcObject = stream;
       await video.play();
-      if (session !== state.session || state.keyboardOnly || state.status !== "loading") return;
+      if (!current()) return;
       $("camera-placeholder").textContent = "Loading pose tracker…";
       await loadModel();
-      if (session !== state.session || state.keyboardOnly || state.status !== "loading") return;
+      if (!current()) return;
       $("camera-placeholder").hidden = true;
       state.keyboardOnly = false;
       state.lastVideoTime = -1;
-      state.raf = requestAnimationFrame(poseLoop);
-      beginCountdown(session);
+      state.cameraBusy = false;
+      ensurePoseLoop();
+      if (state.mode !== "party") beginCountdown(state.session);
     } catch (error) {
-      if (session !== state.session || state.keyboardOnly) return;
+      if (!current()) return;
       const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
       $("error-title").textContent = denied ? "Camera permission denied" : (state.stream ? "Pose model failed to load" : "Camera unavailable");
       $("error-text").textContent = denied ? "Allow camera access in your browser, then retry. You can also play using the test hotkeys." :
@@ -452,7 +501,7 @@
       if (session !== state.session) { clearInterval(state.countdownTimer); return; }
       count--;
       if (count > 0) { box.textContent = String(count); sound("hit"); return; }
-      if (count === 0) { box.textContent = state.mode === "duel" ? "GO!" : "FIGHT!"; sound("sync"); startClock(session); return; }
+      if (count === 0) { box.textContent = state.mode === "duel" ? "GO!" : "FIGHT!"; sound("sync"); if (!isGuest()) startClock(session); return; }
       box.hidden = true;
       clearInterval(state.countdownTimer);
       state.countdownTimer = 0;
@@ -470,15 +519,17 @@
       const now = performance.now();
       if (state.status === "transition") state.endAt += now - state.lastTickAt;
       state.lastTickAt = now;
-      if (state.status !== "playing") return;
-      $("time-value").textContent = String(Math.max(0, Math.ceil((state.endAt - now) / 1000)));
-      if (state.combo && state.mode === "coop" && state.trackers.some((p) => now - p.lastEventAt > 4000)) {
-        state.combo = 0;
-        state.lastEvents = [null, null];
+      if (state.status === "playing") {
+        $("time-value").textContent = String(Math.max(0, Math.ceil((state.endAt - now) / 1000)));
+        if (state.combo && teamMode() && state.trackers.some((p) => now - p.lastEventAt > 4000)) {
+          state.combo = 0;
+          state.lastEvents = state.lastEvents.map(() => null);
+        }
+        if (state.mode !== "duel") bossAttack(now);
+        updateHud();
+        if (now >= state.endAt) finishRound(false);
       }
-      if (state.mode !== "duel") bossAttack(now);
-      updateHud();
-      if (now >= state.endAt) finishRound(false);
+      if (isHost() && (state.status === "playing" || state.status === "transition")) broadcastState(now);
     }, 100);
   }
 
@@ -488,8 +539,7 @@
     show("game");
     state.status = "loading";
     state.keyboardOnly = false;
-    const session = state.session;
-    prepareCamera(session);
+    prepareCamera();
   }
 
   function setResults(title, message, rating, ratingClass, stats) {
@@ -516,32 +566,45 @@
         knockout ? "Pulled clean across the line!" : "Time! The higher score takes the crown.",
         a === b ? "DRAW" : `P${a > b ? 1 : 2} WINS`, a === b ? "silver" : "gold",
         [["P1 SCORE", number(scoreText(a))], ["P2 SCORE", number(scoreText(b))], ["TOTAL REPS", reps], ["CLEAN REPS", clean]]);
-      $("again-button").textContent = "Rematch";
-      $("map-button").hidden = true;
       won = a !== b;
     } else {
       const b = boss();
       const story = state.mode === "story";
+      const mvp = state.mode === "party" && state.roster.length > 1 ? partyMvp() : "";
       const finale = story && won && state.bossIndex === BOSSES.length - 1;
       if (story && won) { progress.cleared = Math.max(progress.cleared, state.bossIndex + 1); saveProgress(); }
       state.advance = story && won && !finale;
       const stars = Math.max(1, state.hearts);
       $("results-eyebrow").textContent = "THE BATTLE IS OVER";
-      setResults(finale ? "The kingdom is saved!" : won ? `${b.name} is defeated!` : `${b.name} wins this time`,
-        finale ? "The storybook is complete. The End." : won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.",
+      const result = [finale ? "The kingdom is saved!" : won ? `${b.name} is defeated!` : `${b.name} wins this time`,
+        (finale ? "The storybook is complete. The End." : won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
         won ? "★".repeat(stars) + "☆".repeat(HEARTS - stars) : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
         [["DAMAGE", `${number(scoreText(state.bossMax - state.bossHp))} / ${state.bossMax}`], ["TOTAL REPS", reps], ["CLEAN REPS", clean],
-          state.mode === "coop" ? ["BEST COMBO", String(state.bestCombo)] : ["PARRIES", String(state.parries)]]);
-      $("again-button").textContent = state.advance ? "Next Chapter" : won ? "Fight Again" : "Try Again";
-      $("map-button").textContent = story ? "Storybook" : "Choose Boss";
-      $("map-button").hidden = false;
+          teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["PARRIES", String(state.parries)]]];
+      setResults(...result);
+      if (isHost()) state.party.broadcast({ t: "results", result, won });
     }
+    setResultActions(won);
     show("results");
     if (won) { sound("victory"); confetti(); }
   }
+  function setResultActions(won) {
+    const party = state.mode === "party";
+    $("again-button").hidden = isGuest();
+    $("again-button").textContent = state.mode === "duel" ? "Rematch" : state.advance ? "Next Chapter" : won ? "Fight Again" : "Try Again";
+    $("map-button").hidden = state.mode === "duel";
+    $("map-button").textContent = state.mode === "story" ? "Storybook" : party ? "Party Lobby" : "Choose Boss";
+    $("menu-button").textContent = party ? "Leave Party" : "Main Menu";
+  }
+  function partyMvp() {
+    let best = 0;
+    state.trackers.forEach((t, i) => { if (t.reps > state.trackers[best].reps) best = i; });
+    const name = state.roster[best]?.name;
+    return name ? ` MVP: ${name} with ${number(state.trackers[best].reps)} reps.` : "";
+  }
 
   function showBosses() {
-    const story = solo();
+    const story = state.mode === "story";
     $("bosses-eyebrow").textContent = story ? "THE STORYBOOK" : "CO-OP BOSS";
     $("bosses-title").textContent = story ? "Choose your chapter" : "Pick a boss to battle";
     $("bosses-note").textContent = story
@@ -712,11 +775,13 @@
   }
   function positionLabels() {
     for (let i = 0; i < 2; i++) {
-      const p = state.trackers[i];
       const label = $(`p${i + 1}-label`);
+      label.hidden = state.mode === "party" || (i === 1 && solo());
+      // A party host can have a single tracker.
+      const p = state.trackers[i];
+      if (label.hidden || !p) continue;
       label.style.left = `${((p.x ?? (i ? .72 : .25)) * 100).toFixed(1)}%`;
       label.style.top = `${Math.max(5, ((p.y ?? .45) - .3) * 100).toFixed(1)}%`;
-      label.hidden = i === 1 && solo();
     }
   }
   function drawSkeleton(assigned) {
@@ -753,7 +818,7 @@
     ).join("\n") + `\nFPS: ${state.fps.toFixed(1)}`;
   }
   function poseLoop(now) {
-    if (state.screen !== "game" || !state.stream || !state.landmarker) return;
+    if (state.screen !== "game" || !state.stream || !state.landmarker) { state.raf = 0; return; }
     const video = $("camera");
     if (video.readyState >= 2 && video.videoWidth && video.currentTime !== state.lastVideoTime) {
       state.lastVideoTime = video.currentTime;
@@ -798,26 +863,291 @@
     state.raf = requestAnimationFrame(poseLoop);
   }
 
+  // Remote party: the host runs the fight and streams state to guests. Each guest
+  // tracks its own camera, reports reps, and mirrors the host's HUD and effects.
+  const validBoss = (index) => Number.isInteger(index) && index >= 0 && index < BOSSES.length;
+  function newParty() {
+    const party = BaffleParty.createParty({
+      onRoster: (members) => { if (state.party === party) onRoster(members); },
+      onMessage: (from, message) => { if (state.party === party) onPartyMessage(from, message); },
+      onStream: (id, stream) => { if (state.party === party) { state.remoteStreams.set(id, stream); renderTiles(); } },
+      onStreamEnd: (id) => { if (state.party === party) { state.remoteStreams.delete(id); renderTiles(); } },
+      onClose: (reason) => { if (state.party === party) leaveParty(reason); },
+      onError: (error) => { if (state.party === party) toast(error?.message || "Connection problem"); }
+    });
+    return party;
+  }
+  function setRemoteBusy(busy) {
+    $("create-party").disabled = $("join-party").disabled = busy;
+    $("create-party").textContent = busy ? "Connecting…" : "Create Party";
+    $("join-party").textContent = busy ? "Connecting…" : "Join Party";
+  }
+  async function openParty(join) {
+    settings.name = $("player-name").value.trim().slice(0, 16);
+    saveSettings();
+    const code = BaffleParty.cleanCode($("join-code").value);
+    if (join && code.length !== 5) { toast("Enter the 5-character party code."); return; }
+    stopRound();
+    const party = newParty();
+    Object.assign(state, { mode: "party", party, roster: [], bossIndex: 0, keyboardOnly: false });
+    setRemoteBusy(true);
+    try {
+      if (join) await party.join(code, settings.name);
+      else await party.create(settings.name);
+    } catch (error) {
+      party.leave();
+      if (state.party === party) { state.party = null; state.mode = "story"; }
+      toast(error?.message || "Could not connect to the party.");
+      return;
+    } finally { setRemoteBusy(false); }
+    if (state.party === party) enterLobby();
+  }
+  function leaveParty(message) {
+    const party = state.party;
+    state.party = null;
+    party?.leave();
+    stopRound();
+    stopMedia();
+    Object.assign(state, { mode: "story", roster: [], partyReps: [], keyboardOnly: false });
+    state.remoteStreams.clear();
+    renderTiles();
+    $("players-bar").hidden = false;
+    show("menu");
+    if (message) toast(message);
+  }
+
+  function onRoster(members) {
+    const before = state.roster;
+    state.roster = members;
+    state.myIndex = Math.max(0, members.findIndex((m) => m.id === state.party.id));
+    if (state.party.isHost) {
+      // Trackers follow players by id as people join and leave mid-fight.
+      const old = new Map(before.map((m, i) => [m.id, i]));
+      state.lastEvents = members.map((m) => (old.has(m.id) && state.lastEvents[old.get(m.id)]) || null);
+      state.trackers = members.map((m) => (old.has(m.id) && state.trackers[old.get(m.id)]) || newTracker());
+      state.party.broadcast({ t: "boss", bossIndex: state.bossIndex });
+    }
+    if (before.length) {
+      const had = new Set(before.map((m) => m.id)), has = new Set(members.map((m) => m.id));
+      members.filter((m) => !had.has(m.id)).forEach((m) => toast(`${m.name} joined the party`));
+      before.filter((m) => !has.has(m.id)).forEach((m) => toast(`${m.name} left the party`));
+    }
+    renderTiles();
+    renderLobby();
+  }
+  function onPartyMessage(from, message) {
+    if (!message || typeof message !== "object") return;
+    if (state.party.isHost) {
+      // Guests can only report their own reps.
+      const index = state.roster.findIndex((m) => m.id === from);
+      if (message.t === "rep" && index > 0 && Object.hasOwn(points, message.quality) && (message.amount === 1 || message.amount === .5)) {
+        recordRep(index, message.quality, message.amount, false);
+      }
+      return;
+    }
+    const inFight = state.screen === "game" && state.status !== "lobby";
+    if (message.t === "boss" && validBoss(message.bossIndex)) { state.bossIndex = message.bossIndex; renderLobby(); }
+    else if (message.t === "start" && validBoss(message.bossIndex)) startPartyFight(message.bossIndex);
+    else if (message.t === "state" && inFight) applySnapshot(message);
+    else if (message.t === "fx" && inFight && Object.hasOwn(EFFECTS, message.name) && Array.isArray(message.args)) EFFECTS[message.name](...message.args);
+    else if (message.t === "results" && inFight) showPartyResults(message);
+    else if (message.t === "lobby") enterLobby();
+  }
+  function broadcastState(now) {
+    state.party.broadcast({ t: "state", status: state.status, hp: state.bossHp, max: state.bossMax, phase: state.phase,
+      exercise: state.exercise, hearts: state.hearts, attack: Boolean(state.attack), combo: state.combo,
+      frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
+      reps: state.trackers.map((t) => t.reps) });
+  }
+  function applySnapshot(snapshot) {
+    if (snapshot.status !== "playing" && snapshot.status !== "transition") return;
+    if (Object.hasOwn(NAMES, snapshot.exercise) && snapshot.exercise !== state.exercise) {
+      state.exercise = snapshot.exercise;
+      state.trackers.forEach(resetMotion);
+      $("pose-tip").textContent = TIPS[state.exercise];
+    }
+    state.status = snapshot.status;
+    state.bossHp = Number(snapshot.hp) || 0;
+    state.bossMax = Number(snapshot.max) || 1;
+    state.phase = Number(snapshot.phase) || 0;
+    state.hearts = Math.max(0, Math.min(HEARTS, Number(snapshot.hearts) || 0));
+    state.attack = snapshot.attack ? {} : null;
+    state.combo = Number(snapshot.combo) || 0;
+    state.frenzyUntil = performance.now() + (Number(snapshot.frenzy) || 0);
+    state.partyReps = Array.isArray(snapshot.reps) ? snapshot.reps.map((n) => Number(n) || 0) : [];
+    $("time-value").textContent = String(Number(snapshot.time) || 0);
+    updateHud();
+  }
+  function showPartyResults(message) {
+    if (!Array.isArray(message.result) || !Array.isArray(message.result[4])) return;
+    const [title, text, rating, ratingClass, stats] = message.result;
+    stopRound();
+    state.advance = false;
+    $("results-eyebrow").textContent = "THE BATTLE IS OVER";
+    setResults(String(title), String(text), String(rating), ["gold", "silver", "bronze"].includes(ratingClass) ? ratingClass : "",
+      stats.slice(0, 4).map((stat) => Array.isArray(stat) ? stat.map(String) : ["", ""]));
+    setResultActions(Boolean(message.won));
+    show("results");
+    if (message.won) { sound("victory"); confetti(); }
+  }
+
+  function enterLobby() {
+    stopRound();
+    state.status = "lobby";
+    $("lobby").hidden = false;
+    for (const id of ["timer", "arena", "duel-hud", "players-bar", "frenzy-banner", "countdown", "waiting"]) $(id).hidden = true;
+    $("mode-label").textContent = "REMOTE PARTY";
+    $("game-title").textContent = "Party Lobby";
+    $("pose-tip").textContent = "Each player needs their own camera with their full body in view.";
+    show("game");
+    renderTiles();
+    renderLobby();
+    positionLabels();
+    if (state.stream) ensurePoseLoop();
+    else if (!state.keyboardOnly && !state.cameraBusy && $("game-error").hidden) {
+      $("camera-placeholder").hidden = false;
+      $("camera-placeholder").textContent = "Preparing the camera…";
+      prepareCamera();
+    }
+    if (isHost()) state.party.broadcast({ t: "lobby" });
+  }
+  function renderLobby() {
+    if (state.mode !== "party" || !state.party) return;
+    const host = state.party.isHost, count = playerCount(), b = boss();
+    $("party-code").textContent = state.party.code;
+    $("lobby-status").textContent = `${count} of ${BaffleParty.MAX_PLAYERS} players`;
+    $("lobby-hp").textContent = `${b.name}: ${b.hp} × ${count} = ${b.hp * count} HP`;
+    $("boss-picker").replaceChildren(...BOSSES.map((item, i) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `pick${i === state.bossIndex ? " selected" : ""}`;
+      button.disabled = !host;
+      button.innerHTML = `<span class="sprite"></span><span>${item.name}</span>`;
+      renderSprite(button.querySelector(".sprite"), item);
+      button.addEventListener("click", () => {
+        state.bossIndex = i;
+        state.party.broadcast({ t: "boss", bossIndex: i });
+        renderLobby();
+      });
+      return button;
+    }));
+    $("start-party").hidden = !host;
+    $("lobby-wait").hidden = host;
+  }
+  function startPartyFight(bossIndex) {
+    stopRound();
+    state.bossIndex = bossIndex;
+    resetRound();
+    show("game");
+    state.status = "loading";
+    ensurePoseLoop();
+    beginCountdown(state.session);
+  }
+  function hostStart() {
+    if (!isHost()) return;
+    state.party.broadcast({ t: "start", bossIndex: state.bossIndex });
+    startPartyFight(state.bossIndex);
+  }
+  async function copyInvite() {
+    const link = `${location.origin}${location.pathname}?party=${state.party.code}`;
+    try { await navigator.clipboard.writeText(link); toast("Invite link copied"); }
+    catch { toast(link); }
+  }
+
+  // This device's camera is always the first tile; other players follow in roster order.
+  function tileFor(index) {
+    const id = state.roster[index]?.id;
+    return [...$("stage-grid").querySelectorAll(".remote")].find((tile) => tile.dataset.peer === id) || null;
+  }
+  function renderTiles() {
+    const grid = $("stage-grid");
+    const others = state.mode === "party" ? state.roster.filter((m) => m.id !== state.party?.id) : [];
+    grid.classList.toggle("multi", others.length > 0);
+    grid.classList.toggle("many", others.length >= 3);
+    const keep = new Set(others.map((m) => m.id));
+    grid.querySelectorAll(".remote").forEach((tile) => { if (!keep.has(tile.dataset.peer)) tile.remove(); });
+    for (const member of others) {
+      let tile = [...grid.querySelectorAll(".remote")].find((item) => item.dataset.peer === member.id);
+      if (!tile) {
+        tile = document.createElement("div");
+        tile.className = "stage remote";
+        tile.dataset.peer = member.id;
+        tile.innerHTML = `<video autoplay muted playsinline></video><div class="camera-placeholder">Connecting camera…</div><div class="tile-name"></div>`;
+        grid.append(tile);
+      }
+      const stream = state.remoteStreams.get(member.id) || null;
+      const video = tile.querySelector("video");
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+        if (stream) video.play().catch(() => { /* Autoplay resumes on the next user gesture. */ });
+      }
+      tile.querySelector(".camera-placeholder").hidden = Boolean(stream);
+    }
+    updateTileNames();
+  }
+  function updateTileNames() {
+    const party = state.mode === "party";
+    $("local-name").hidden = !party;
+    if (!party) return;
+    const fighting = state.status !== "lobby";
+    state.roster.forEach((member, i) => {
+      const label = (i === state.myIndex ? $("stage") : tileFor(i))?.querySelector(".tile-name");
+      if (!label) return;
+      const reps = isHost() ? state.trackers[i]?.reps ?? 0 : state.partyReps[i] ?? 0;
+      label.textContent = `${i === 0 ? "♛ " : ""}${member.name}${i === state.myIndex ? " (you)" : ""}${fighting ? ` · ${number(reps)} reps` : ""}`;
+    });
+  }
+
   $("story-button").addEventListener("click", () => { state.mode = "story"; showBosses(); });
   $("coop-button").addEventListener("click", () => { state.mode = "coop"; showBosses(); });
   $("duel-button").addEventListener("click", () => { state.mode = "duel"; show("exercise"); });
   $("how-button").addEventListener("click", () => show("how"));
   $("settings-button").addEventListener("click", () => show("settings"));
-  $("brand").addEventListener("click", () => { if (state.screen === "game") stopRound(); show("menu"); });
+  $("remote-button").addEventListener("click", () => show("remote"));
+  function goToMenu() {
+    if (state.party) { leaveParty(); return; }
+    if (state.screen === "game") stopRound();
+    show("menu");
+  }
+  $("brand").addEventListener("click", goToMenu);
   document.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => show(button.dataset.screen)));
   document.querySelectorAll("[data-exercise]").forEach((button) => button.addEventListener("click", () => { state.exercise = button.dataset.exercise; startGame(); }));
-  $("leave-button").addEventListener("click", () => { stopRound(); show("menu"); });
-  $("menu-button").addEventListener("click", () => show("menu"));
-  $("map-button").addEventListener("click", showBosses);
-  $("again-button").addEventListener("click", () => { if (state.advance) state.bossIndex++; startGame(); });
+  $("leave-button").addEventListener("click", goToMenu);
+  $("menu-button").addEventListener("click", goToMenu);
+  $("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showBosses(); });
+  $("again-button").addEventListener("click", () => {
+    if (state.party) { hostStart(); return; }
+    if (state.advance) state.bossIndex++;
+    startGame();
+  });
+  $("create-party").addEventListener("click", () => openParty(false));
+  $("join-party").addEventListener("click", () => openParty(true));
+  $("join-code").addEventListener("keydown", (event) => { if (event.key === "Enter") openParty(true); });
+  $("start-party").addEventListener("click", hostStart);
+  $("copy-invite").addEventListener("click", copyInvite);
+  $("player-name").value = settings.name;
+  window.addEventListener("pagehide", () => state.party?.leave());
+  const invite = BaffleParty.cleanCode(new URLSearchParams(location.search).get("party"));
+  if (invite.length === 5) { $("join-code").value = invite; show("remote"); }
   $("retry-button").addEventListener("click", () => {
-    stopMedia(); state.status = "loading";
+    stopMedia();
+    if (state.mode !== "party") state.status = "loading";
     $("game-error").hidden = true;
     $("camera-placeholder").hidden = false;
     $("camera-placeholder").textContent = "Preparing the camera…";
-    prepareCamera(state.session);
+    prepareCamera();
   });
   function useHotkeys() {
+    if (state.mode === "party") {
+      // Party hotkeys always work; without a camera this just clears the error.
+      if (!state.stream) {
+        stopMedia(); state.keyboardOnly = true;
+        $("camera-placeholder").hidden = false;
+        $("camera-placeholder").textContent = "Hotkey mode — press 1 or Q";
+      }
+      $("game-error").hidden = true;
+      return;
+    }
     if (state.status !== "loading") return;
     stopMedia(); state.keyboardOnly = true;
     $("game-error").hidden = true;
