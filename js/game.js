@@ -1,7 +1,7 @@
 /* The fight loop: scoring reps, boss phases and attacks, the clock, and results. */
 
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, DUEL_TIME, feedback, HEARTS, NAMES, PARRY_WINDOW, points, ROMAN, TIPS } from "./config.js";
+import { BOSSES, DUEL_TIME, feedback, HEARTS, NAMES, PARRY_WINDOW, points, REP_GAP, REP_VALUE, ROMAN, TIPS } from "./config.js";
 import { broadcastState } from "./party.js";
 import { boss, comboMultiplier, isFrenzy, isGuest, isHost, newTracker, number, playerCount, progress, resetMotion, rope, saveProgress, scoreText, solo, state, streakMultiplier, teamMode } from "./state.js";
 import { $, clearAlert, confetti, flashAndShake, floatText, fx, renderSprite, setResults, show, sound, updateHud } from "./ui.js";
@@ -10,7 +10,7 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
   const now = performance.now();
   const player = state.trackers[index];
-  if (!player || (fromCamera && now - player.lastRepAt < 400)) return;
+  if (!player || (fromCamera && now - player.lastRepAt < (REP_GAP[state.exercise] ?? 400))) return;
   player.lastRepAt = now;
   if (isGuest()) {
     // The host keeps score; a guest only reports its own reps.
@@ -29,7 +29,7 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
     sound("hit");
     // A run of clean reps raises that player's multiplier; any other rep resets it.
     player.streak = quality === "clean" ? player.streak + 1 : 0;
-    const earned = points[quality] * streakMultiplier(player.streak);
+    const earned = points[quality] * REP_VALUE[state.exercise] * streakMultiplier(player.streak);
     state.scores[index] = scoreText(state.scores[index] + earned);
     floatText(index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
     updateHud();
@@ -38,7 +38,7 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   }
 
   // Rep damage uses the combo that was active as this rep began.
-  const earned = points[quality] * comboMultiplier() * (isFrenzy(now) ? 2 : 1);
+  const earned = points[quality] * REP_VALUE[state.exercise] * comboMultiplier() * (isFrenzy(now) ? 2 : 1);
   let damage = earned;
   fx("sound", "hit");
   fx("floatText", index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");

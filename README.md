@@ -1,6 +1,6 @@
 # Baffle
 
-**Buff + Scuffle.** A client-side fairy-tale fitness brawler for one or two people sharing a webcam, or a party of up to six playing online. Your squats, jumping jacks, and planks are your attacks.
+**Buff + Scuffle.** A client-side fairy-tale fitness brawler for one or two people sharing a webcam, or a party of up to six playing online. Your squats, jumping jacks, punches, push-ups, and planks are your attacks.
 
 ## Modes
 
@@ -11,8 +11,8 @@
 
 ## Boss fights
 
-- Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. A held plank deals damage every 1.2 seconds.
-- Bosses rotate exercises as their health drops (e.g. squats → jumping jacks → plank). The game pauses for 3 seconds between phases (5 seconds before a plank) so players can change position.
+- Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. Push-ups are worth 1.5×, punches 0.5× (they come fast). A held plank deals damage every 1.2 seconds.
+- Bosses rotate exercises as their health drops (e.g. squats → punches → push-ups → jumping jacks). The game pauses for 3 seconds between phases (5 seconds before a plank) so players can change position.
 - Every 8–11 seconds the boss attacks. Land a rep within 2.5 seconds to parry for +2 damage, or lose one of your three hearts.
 - You lose if your hearts or the clock run out.
 
@@ -65,6 +65,10 @@ The game is plain ES modules with no build step; `index.html` loads `js/main.js`
 ## Known limitations
 
 - Two-player tracking works best when both people remain fully visible and do not cross paths. Assignments follow the nearest prior hip positions; the **Swap P1 / P2** setting corrects an unwanted assignment.
-- Planks and push-ups need a side view with the shoulder, hip, and ankle visible. Push-ups are experimental.
+- Squats, jumping jacks, and punches only need the upper body in frame:
+  - Squats use the knee angle when a leg is visible. Otherwise they measure how far the shoulders drop below standing height, in shoulder widths. Bowing forward can also register as a squat in that mode.
+  - Jumping jacks check the arms only when the feet are out of frame.
+  - Punches count each arm going from bent to straight at shoulder height. They use MediaPipe's 3D world landmarks so punches toward the camera register; that depth estimate is the least reliable signal, so tune it with the debug overlay and sensitivity slider.
+- Planks need a side view with the shoulder, hip, and ankle visible. Push-ups need a side view of the arm; body straightness is checked against the ankle, or the knee if the feet are out of frame.
 - Lighting, camera angle, loose clothing, and partial bodies can affect pose detection and form scores. The sensitivity slider can help, but full movements are more reliable.
 - Remote parties support boss fights only; remote duels and random matchmaking are not built yet.

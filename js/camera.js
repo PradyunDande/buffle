@@ -1,7 +1,7 @@
 /* Camera, pose model, and the per-frame tracking loop. */
 
 import { BONES, MODEL_URL, VISION_URL } from "./config.js";
-import { joint, processJack, processPlank, processPushup, processSquat } from "./exercises.js";
+import { joint, processJack, processPlank, processPunch, processPushup, processSquat } from "./exercises.js";
 import { beginCountdown } from "./game.js";
 import { resetMotion, settings, solo, state } from "./state.js";
 import { $ } from "./ui.js";
@@ -81,13 +81,18 @@ export async function prepareCamera() {
 
 // The video and canvas are both mirrored in CSS. Assignments use mirrored x,
 // then choose the permutation nearest the previous player positions.
-function hipMidpoint(landmarks) {
-  const a = joint(landmarks, 23), b = joint(landmarks, 24);
-  if (!a || !b) return null;
-  return { x: 1 - (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+// Players are placed by their hips, or by their shoulders when the hips are out of frame.
+function bodyPoint(landmarks) {
+  for (const [l, r] of [[23, 24], [11, 12]]) {
+    const a = joint(landmarks, l), b = joint(landmarks, r);
+    if (a && b) return { x: 1 - (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  return null;
 }
-function assignPlayers(poses, now) {
-  const candidates = poses.map((landmarks) => ({ landmarks, point: hipMidpoint(landmarks) })).filter((x) => x.point);
+function assignPlayers(result, now) {
+  const poses = result.landmarks || [];
+  const candidates = poses.map((landmarks, i) => ({ landmarks, world: result.worldLandmarks?.[i], point: bodyPoint(landmarks) }))
+    .filter((x) => x.point);
   if (solo()) return candidates.length ? [candidates[0], null] : [null, null];
   if (candidates.length >= 2) {
     const pair = candidates.slice(0, 2);
@@ -152,7 +157,7 @@ export function updateDebug() {
   box.hidden = !settings.debug;
   if (!settings.debug) return;
   box.textContent = state.trackers.slice(0, solo() ? 1 : 2).map((p, i) =>
-    `P${i + 1}: ${p.angle === null ? "—" : p.angle.toFixed(1)}${state.exercise === "jacks" ? "×" : "°"} | ${p.phase} | vis ${p.visibility.toFixed(2)} | ${p.form}`
+    `P${i + 1}: ${p.angle === null ? "—" : p.angle.toFixed(p.unit === "×" ? 2 : 1)}${p.unit}${p.method ? ` (${p.method})` : ""} | ${p.phase} | vis ${p.visibility.toFixed(2)} | ${p.form}`
   ).join("\n") + `\nFPS: ${state.fps.toFixed(1)}`;
 }
 function poseLoop(now) {
@@ -162,7 +167,7 @@ function poseLoop(now) {
     state.lastVideoTime = video.currentTime;
     try {
       const result = state.landmarker.detectForVideo(video, now);
-      const assigned = assignPlayers(result.landmarks || [], now);
+      const assigned = assignPlayers(result, now);
       const needed = solo() ? 1 : 2;
       const detected = assigned.filter(Boolean).length;
       $("waiting").hidden = solo() || detected >= needed;
@@ -182,6 +187,7 @@ function poseLoop(now) {
         if (state.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
         else if (state.exercise === "jacks") processJack(index, entry.landmarks, now);
         else if (state.exercise === "plank") processPlank(index, entry.landmarks, aspect, now);
+        else if (state.exercise === "punches") processPunch(index, entry.landmarks, entry.world, aspect, now);
         else processPushup(index, entry.landmarks, aspect, now);
       });
       drawSkeleton(assigned);

@@ -28,13 +28,15 @@ export const boss = () => BOSSES[state.bossIndex];
 export function newTracker() {
   return { x: null, y: null, seenAt: 0, phase: "UP", angles: [], angle: null,
     visibility: 0, minAngle: 180, maxLean: 0, cleanJack: false, straight: false,
-    holdStart: 0, holdMin: 180, streak: 0,
+    holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, maxDepth: 0, arms: newArms(),
     form: "—", reps: 0, lastRepAt: -Infinity, lastEventAt: 0 };
 }
+function newArms() { return [{ phase: "GUARD", max: 0 }, { phase: "GUARD", max: 0 }]; }
 // Drop any half-finished movement, keeping the player's position for assignment.
 export function resetMotion(t) {
   t.phase = "UP"; t.angles = []; t.angle = null; t.minAngle = 180; t.maxLean = 0;
   t.cleanJack = false; t.straight = false; t.holdStart = 0; t.holdMin = 180;
+  t.method = null; t.topY = null; t.maxDepth = 0; t.arms = newArms();
 }
 
 function loadSettings() {
