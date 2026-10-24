@@ -44,7 +44,23 @@ During a fight, press **1** for a clean P1 rep, **2** for a clean P2 rep, **Q** 
 
 ## Boss art
 
-Each boss in `BOSSES` (top of `app.js`) has a 16×16 pixel map drawn on a canvas. To use generated pixel art instead, add the image (e.g. `assets/bosses/wolf.png`) and set that boss's `image` field to its path. Square images with transparent backgrounds look best.
+Each boss in `BOSSES` ([js/config.js](js/config.js)) has a 16×16 pixel map drawn on a canvas. To use generated pixel art instead, add the image (e.g. `assets/bosses/wolf.png`) and set that boss's `image` field to its path. Square images with transparent backgrounds look best.
+
+## Code layout
+
+The game is plain ES modules with no build step; `index.html` loads `js/main.js`, which imports the rest.
+
+| File | What it holds |
+| --- | --- |
+| `js/main.js` | Entry point: button, keyboard, and settings wiring |
+| `js/config.js` | Exercise names, scoring constants, and the boss roster |
+| `js/state.js` | Shared game state, saved settings and story progress, scoring helpers |
+| `js/ui.js` | DOM helpers, sounds and effects, sprites, the in-fight HUD |
+| `js/game.js` | The fight loop: reps, boss phases and attacks, clock, results |
+| `js/exercises.js` | Rep detection for squats, jumping jacks, push-ups, and planks |
+| `js/camera.js` | Camera, pose model, and the per-frame tracking loop |
+| `js/party.js` | Remote party gameplay: lobby, roster, host-to-guest sync, camera grid |
+| `js/network.js` | PeerJS connections for remote parties |
 
 ## Known limitations
 
