@@ -19,16 +19,19 @@ export const SWITCH_PAUSE = { plank: 5000, pushups: 5000 };
 export const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 export const points = { clean: 2, ok: 1, bad: 0.5 };
 export const feedback = { clean: "CLEAN", ok: "OK", bad: "SLOPPY" };
-export const HEARTS = 3, PARRY_WINDOW = 2500, PLANK_TICK = 1200, ROPE = 25, DUEL_TIME = 45000;
+export const HEARTS = 5, PLANK_TICK = 1200, ROPE = 25, DUEL_TIME = 45000;
 
 // Difficulty sets the fight: `hp` is per player, and the boss calls a random move
 // from `moves` for each player on their own timer of `switchEvery` [min, max] ms.
+// Every boss attack costs a heart. `attackEvery` is set so a team at a typical pace
+// loses about one heart on Easy, two on Normal, and three or four on Hard; only on
+// Hard can a slow team run out of hearts (at 90 s) before the clock does.
 export const DIFFICULTIES = {
-  easy: { name: "Easy", blurb: "Standing moves only, with slow switches.", hp: 24, time: 90, attackEvery: 12000,
+  easy: { name: "Easy", blurb: "Standing moves only, with slow switches.", hp: 24, time: 90, attackEvery: 40000,
     switchEvery: [14000, 20000], moves: ["squats", "punches", "jacks"] },
-  normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 36, time: 90, attackEvery: 10000,
+  normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 36, time: 90, attackEvery: 28000,
     switchEvery: [10000, 15000], moves: ["squats", "punches", "jacks", "pushups"] },
-  hard: { name: "Hard", blurb: "Every move, planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 8000,
+  hard: { name: "Hard", blurb: "Every move, planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 18000,
     switchEvery: [8000, 12000], moves: ["squats", "punches", "jacks", "pushups", "plank"] }
 };
 

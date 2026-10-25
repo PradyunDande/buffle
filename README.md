@@ -16,15 +16,15 @@ Difficulty sets the fight; the monster only changes the look and lines.
 
 | Difficulty | Boss HP per player | Time | Boss attacks every | Move switches every | Moves |
 | --- | --- | --- | --- | --- | --- |
-| Easy | 24 | 90 s | 12 s | 14–20 s | squats, punches, jumping jacks |
-| Normal | 36 | 90 s | 10 s | 10–15 s | + push-ups |
-| Hard | 50 | 100 s | 8 s | 8–12 s | + planks |
+| Easy | 24 | 90 s | 40 s | 14–20 s | squats, punches, jumping jacks |
+| Normal | 36 | 90 s | 28 s | 10–15 s | + push-ups |
+| Hard | 50 | 100 s | 18 s | 8–12 s | + planks |
 
 - Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. Push-ups are worth 1.5×, punches 0.5× (they come fast). A held plank deals damage every 1.2 seconds.
 - The boss calls a random move from the difficulty's list for each player, on that player's own timer, so teammates can be on different moves at once. Each call comes as a line of dialog in the monster's speech bubble, using the player's name ("Hosty, drop and give me push-ups!"). Local players set names on the Boss Fight setup screen; remote players use their party name. Lines live in each boss's `lines` in `js/config.js`.
 - A player's reps pause for 3 seconds after a switch (5 before push-ups or a plank) so they can change position; everyone else keeps fighting. If every player is switching at once, the clock and the boss's attacks wait. The boss never calls a switch mid-attack.
-- Every 8–11 seconds the boss attacks. Land a rep within 2.5 seconds to parry for +2 damage, or lose one of your three hearts.
-- You lose if your hearts or the clock run out.
+- The boss attacks on a timer set by the difficulty, and every attack costs the team one of its five hearts. At a typical pace a team loses about one heart on Easy, two on Normal, and three or four on Hard; only on Hard can a slow team run out of hearts (at 90 s) before the clock.
+- You lose if your hearts or the clock run out. Winning ranks you by hearts left: S for all five, A for three or four, B otherwise.
 
 ## Run
 

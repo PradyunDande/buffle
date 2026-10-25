@@ -222,7 +222,7 @@ function onPartyMessage(from, message) {
 // Each player's move and how long until they're ready travel with every update.
 export function broadcastState(now) {
   state.party.broadcast({ t: "state", status: state.status, hp: state.bossHp, max: state.bossMax,
-    hearts: state.hearts, attack: Boolean(state.attack), combo: state.combo,
+    hearts: state.hearts, combo: state.combo,
     frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
     reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise), scores: state.scores,
     ready: state.trackers.map((t) => Math.max(0, Math.round(t.readyAt - now))) });
@@ -247,7 +247,6 @@ function applySnapshot(snapshot) {
   state.bossHp = Number(snapshot.hp) || 0;
   state.bossMax = Number(snapshot.max) || 1;
   state.hearts = Math.max(0, Math.min(HEARTS, Number(snapshot.hearts) || 0));
-  state.attack = snapshot.attack ? {} : null;
   state.combo = Number(snapshot.combo) || 0;
   state.frenzyUntil = performance.now() + (Number(snapshot.frenzy) || 0);
   state.partyReps = Array.isArray(snapshot.reps) ? snapshot.reps.map((n) => Number(n) || 0) : [];

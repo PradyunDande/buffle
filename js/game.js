@@ -1,7 +1,7 @@
 /* The fight loop: scoring reps, boss move calls and attacks, the clock, and results. */
 
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, PARRY_WINDOW, points, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
+import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
 import { broadcastState } from "./party.js";
 import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
 import { $, clearAlert, confetti, flashAndShake, fx, renderSprite, resetSpeech, setResults, show, showAlert, sound, updateHud, updateTip } from "./ui.js";
@@ -42,14 +42,6 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   let damage = earned;
   fx("sound", "hit");
   fx("floatText", index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
-  if (state.attack) {
-    state.attack = null;
-    state.parries++;
-    state.nextAttackAt = now + difficulty().attackEvery;
-    damage += 2;
-    fx("floatText", index, "PARRY! +2", "sync");
-    fx("showAlert", "PARRIED!", "good", 1200);
-  }
 
   // A rep syncs with any other player's unpaired rep from the last 700ms.
   const partner = state.lastEvents.find((e, i) => i !== index && e && !e.paired && now - e.at <= 700);
@@ -107,7 +99,6 @@ function switchMove(index, now, move = pickMove(state.trackers[index].exercise))
   updateTip();
 }
 function scheduleMoves(now) {
-  if (state.attack) return;
   if (state.mode === "duel") {
     // Duelists share one timer and always switch together.
     const [first, second] = state.trackers;
@@ -121,19 +112,14 @@ function scheduleMoves(now) {
   activeTrackers().forEach((t, i) => { if (now >= t.switchAt) switchMove(i, now); });
 }
 
+// Boss attacks always land: each one costs the team a heart.
 function bossAttack(now) {
-  if (!state.attack) {
-    if (now < state.nextAttackAt) return;
-    state.attack = { until: now + PARRY_WINDOW };
-    fx("showAlert", `${boss().attack}! Keep moving to parry!`, "danger");
-    fx("sound", "warn");
-    return;
-  }
-  if (now < state.attack.until) return;
-  state.attack = null;
+  if (now < state.nextAttackAt) return;
   state.hearts--;
   state.nextAttackAt = now + difficulty().attackEvery;
-  fx("showAlert", state.hearts ? `OUCH! ${state.hearts} heart${state.hearts === 1 ? "" : "s"} left` : "OUCH!", "danger", 1400);
+  const left = state.hearts ? ` ${state.hearts} heart${state.hearts === 1 ? "" : "s"} left` : "";
+  fx("showAlert", `${boss().attack}!${left}`, "danger", 2000);
+  fx("flashAndShake", "lunge", "boss-sprite");
   fx("flashAndShake", "shake");
   fx("sound", "hurt");
   if (state.hearts <= 0) finishRound(false);
@@ -147,7 +133,7 @@ export function resetRound() {
   state.frenzyUntil = 0; state.cleanEvents = 0; state.repEvents = 0;
   state.lastEvents = state.trackers.map(() => null); state.endAt = 0;
   state.scores = [0, 0]; state.hearts = HEARTS;
-  state.attack = null; state.parries = 0; state.partyReps = []; state.partyMoves = [];
+  state.partyReps = []; state.partyMoves = [];
   if (duel) {
     state.duration = DUEL_TIME;
     const move = pickMove(null);
@@ -288,10 +274,10 @@ function finishRound(won = false) {
     const mvp = state.mode === "party" && state.roster.length > 1 ? partyMvp() : "";
     result = [won ? `${b.name} is defeated!` : `${b.name} wins this time`,
       (won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
-      // Rank by hearts left: all three is S, then A, then B.
-      won ? `${["B", "B", "A", "S"][state.hearts]} RANK` : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
+      // Rank by hearts left: all five is S, three or four A, otherwise B.
+      won ? `${state.hearts === HEARTS ? "S" : state.hearts >= 3 ? "A" : "B"} RANK` : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
       [["DAMAGE", `${number(scoreText(state.bossMax - state.bossHp))} / ${state.bossMax}`], ["TOTAL REPS", reps], ["CLEAN REPS", clean],
-        teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["PARRIES", String(state.parries)]]];
+        teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["HEARTS LEFT", `${state.hearts} / ${HEARTS}`]]];
   }
   setResults(...result);
   if (isHost()) state.party.broadcast({ t: "results", result, won });

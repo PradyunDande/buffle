@@ -164,7 +164,6 @@ export function updateHud() {
     $("move-label").textContent = moveLabel();
     renderHearts(state.hearts);
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
-    $("boss-sprite").classList.toggle("winding", Boolean(state.attack));
   }
   if (online()) updateTileNames();
   else {

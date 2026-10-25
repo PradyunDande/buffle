@@ -12,7 +12,7 @@ export const state = {
   trackers: [newTracker(), newTracker()],
   combo: 0, bestCombo: 0, frenzyUntil: 0, cleanEvents: 0, repEvents: 0,
   lastEvents: [null, null], endAt: 0, duration: 0, lastTickAt: 0,
-  bossHp: 0, bossMax: 0, hearts: HEARTS, attack: null, nextAttackAt: 0, parries: 0,
+  bossHp: 0, bossMax: 0, hearts: HEARTS, nextAttackAt: 0,
   scores: [0, 0], cameraToken: 0, cameraBusy: false,
   party: null, searching: false, roster: [], myIndex: 0,
   mic: null, micBusy: false, micMuted: false, micError: false, remoteAudio: new Map(), partyReps: [], partyMoves: [], remoteStreams: new Map(),

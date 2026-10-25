@@ -787,9 +787,9 @@ body:has(#game.active) .corner {
   animation: bob 1.2s steps(2) infinite alternate;
 }
 
-.boss-sprite.winding {
+.boss-sprite.lunge {
   border-color: var(--ui-danger);
-  animation: bob .2s steps(2) infinite alternate;
+  animation: lunge .4s steps(4);
 }
 
 .boss-sprite.hit {
@@ -1533,6 +1533,12 @@ body:has(#game.active) .corner {
   from {
     transform: scale(.8);
     transform-origin: left center;
+  }
+}
+
+@keyframes lunge {
+  40% {
+    transform: translateX(10px) scale(1.15);
   }
 }
 
