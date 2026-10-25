@@ -71,6 +71,7 @@ The game is plain ES modules with no build step; `index.html` loads `js/main.js`
 | `js/config.js` | Exercise names, scoring constants, and the boss roster |
 | `js/state.js` | Shared game state, saved settings, scoring helpers |
 | `js/ui.js` | DOM helpers, sounds and effects, sprites, the in-fight HUD |
+| `js/music.js` | Lobby and fight music (`audio/`), half volume online, volumes from Settings |
 | `js/game.js` | The fight loop: reps, the boss's move calls and attacks, clock, results |
 | `js/exercises.js` | Rep detection for squats, jumping jacks, push-ups, and planks |
 | `js/camera.js` | Camera, pose model, and the per-frame tracking loop |

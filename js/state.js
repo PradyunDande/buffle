@@ -65,7 +65,7 @@ export function resetMotion(t) {
 }
 
 function loadSettings() {
-  const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, swapped: false, name: "", name2: "", players: 1, difficulty: "normal" };
+  const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, lobbyVolume: 60, fightVolume: 60, swapped: false, name: "", name2: "", players: 1, difficulty: "normal" };
   try { return { ...defaults, ...JSON.parse(localStorage.getItem("buffle-settings") || "{}") }; }
   catch { return defaults; }
 }

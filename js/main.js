@@ -2,6 +2,7 @@
 
 import { positionLabels, prepareCamera, skipFraming, stopMedia, updateDebug } from "./camera.js";
 import { setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
+import { updateMusic } from "./music.js";
 import { cleanCode } from "./network.js";
 import { browseParties, cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty, setVisibility } from "./party.js";
 import { isGuest, online, saveSettings, settings, state } from "./state.js";
@@ -85,6 +86,14 @@ $("retry-button").addEventListener("click", () => {
 for (const [id, key] of [["sound-toggle","sound"],["effects-toggle","effects"],["debug-toggle","debug"]]) {
   $(id).checked = settings[key];
   $(id).addEventListener("change", (event) => { settings[key] = event.target.checked; saveSettings(); updateDebug(); });
+}
+// Music volume, 0–100 for each track; online it plays at half this.
+for (const key of ["lobby", "fight"]) {
+  const slider = $(`${key}-volume`), setting = `${key}Volume`;
+  const label = () => { $(`${key}-volume-value`).textContent = settings[setting] ? `${settings[setting]}%` : "Off"; };
+  slider.value = settings[setting];
+  label();
+  slider.addEventListener("input", () => { settings[setting] = Number(slider.value); label(); saveSettings(); updateMusic(); });
 }
 $("sensitivity").value = settings.sensitivity;
 function sensitivityName() { $("sensitivity-name").textContent = settings.sensitivity < -5 ? "Strict" : settings.sensitivity > 5 ? "Forgiving" : "Normal"; }
