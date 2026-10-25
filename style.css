@@ -702,6 +702,34 @@ body:has(#game.active) .corner {
   margin-top: 12px;
 }
 
+.credits {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 2px solid var(--ui-border);
+  text-align: center;
+  color: var(--text-main);
+}
+
+.credits h3 {
+  color: var(--ui-accent);
+  font-weight: 700;
+}
+
+.credits p,
+.credits ul {
+  margin: 0 0 12px;
+}
+
+.credits ul {
+  padding: 0;
+  list-style: none;
+}
+
+.credits p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 /* ==========================================================================
    Game header and HUD
    ========================================================================== */
