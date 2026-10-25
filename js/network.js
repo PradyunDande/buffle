@@ -34,6 +34,7 @@ const PING_EVERY = 2000;
 const SILENCE_LIMIT = 12000;
 // How long a camera call may take to connect before it's placed again.
 const CALL_RETRY = 10000;
+const RECONNECT_DELAY = 3000;
 const JOIN_ERRORS = {
   missing: "No party found with that code.",
   full: "That party is full.",
@@ -135,11 +136,18 @@ export function createParty(handlers) {
       let opened = false;
       candidate.on("open", (assigned) => {
         opened = true;
+        // Left (a cancelled search, say) while this peer was opening: don't keep a
+        // room or link alive that nobody is behind.
+        if (closed) { candidate.destroy(); reject(new Error("Cancelled.")); return; }
         if (adopt) { peer = candidate; party.id = assigned; }
         resolve(candidate);
       });
       candidate.on("call", answer);
-      candidate.on("disconnected", () => { if (!closed && !candidate.destroyed) candidate.reconnect(); });
+      // Lost the PeerJS server (calls and links already open keep working). Retry
+      // after a pause: offline, an immediate retry fails at once and loops.
+      candidate.on("disconnected", () => {
+        setTimeout(() => { if (!closed && !candidate.destroyed && candidate.disconnected) candidate.reconnect(); }, RECONNECT_DELAY);
+      });
       candidate.on("error", (error) => {
         if (!opened) { candidate.destroy(); reject(error); return; }
         if (error.type === "peer-unavailable") {
@@ -169,6 +177,8 @@ export function createParty(handlers) {
       const link = via.connect(hostId, { reliable: true });
       link.on("open", () => link.send({ t: "hello", name: cleanName(name) }));
       link.on("data", (message) => {
+        // Left mid-join (a cancelled search): hang up rather than join as nobody.
+        if (closed) { link.close(); return; }
         heard.set(hostId, Date.now());
         if (message?.t === "ping") { link.send({ t: "pong" }); return; }
         if (message?.t === "full") { finish(new JoinError("full")); return; }

@@ -44,6 +44,8 @@ export function setVisibility(choice) {
 // `kind` is "create", "join" (by code), or "public" (a listing from the browser).
 // Resolves to whether the player made it into the party.
 export async function openParty(kind, listing) {
+  // Already connecting (Enter pressed twice, say) or in a party.
+  if (state.party) return false;
   settings.name = $("player-name").value.trim().slice(0, 16);
   saveSettings();
   const code = cleanCode($("join-code").value);
@@ -64,6 +66,12 @@ export async function openParty(kind, listing) {
     return false;
   } finally { setRemoteBusy(false); }
   if (state.party !== party) return false;
+  // The player went back while it was connecting: don't pull them into the lobby.
+  if (!["remote", "browse"].includes(state.screen)) {
+    party.leave();
+    resetOnline("solo");
+    return false;
+  }
   enterLobby();
   return true;
 }

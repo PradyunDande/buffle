@@ -10,8 +10,10 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
   const now = performance.now();
   const player = state.trackers[index];
-  // A player frozen by Strike a Pose can't attack until they strike it.
-  if (!player || player.pose || (fromCamera && now - player.lastRepAt < (REP_GAP[player.exercise] ?? 400))) return;
+  // A player frozen by Strike a Pose can't attack until they strike it. Reps from a
+  // guest's camera can arrive bunched up by the network, so they get half the gap.
+  const gap = (REP_GAP[player?.exercise] ?? 400) * (fromCamera ? 1 : .5);
+  if (!player || player.pose || now - player.lastRepAt < gap) return;
   player.lastRepAt = now;
   if (isGuest()) {
     // The host keeps score; a guest only reports its own reps.
