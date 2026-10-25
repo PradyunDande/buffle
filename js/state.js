@@ -1,6 +1,6 @@
 /* Shared game state, saved settings, and scoring helpers. */
 
-import { BOSSES, DIFFICULTIES, HEARTS, ROPE } from "./config.js";
+import { BOSSES, DIFFICULTIES, HEARTS, ROPE, TEAM_HP } from "./config.js";
 
 export const settings = loadSettings();
 export const state = {
@@ -28,6 +28,11 @@ export const isGuest = () => online() && !state.party.isHost;
 export const playerCount = () => online() ? Math.max(1, state.roster.length) : state.mode === "coop" || state.mode === "duel" ? 2 : 1;
 export const boss = () => BOSSES[state.bossIndex];
 export const difficulty = () => DIFFICULTIES[state.difficulty];
+// Boss HP for a fight of `players`: the solo HP for each, plus TEAM_HP more for
+// each teammate (2 players: 2.6×, 4 players: 7.6×, 6 players: 15×).
+export function bossHealth(players) {
+  return Math.round(difficulty().hp * players * (1 + TEAM_HP * (players - 1)));
+}
 export const activeTrackers = () => state.trackers.slice(0, playerCount());
 // The players this device's camera tracks: one in a party, otherwise everyone.
 export const localTrackers = () => online() ? state.trackers.slice(0, 1) : activeTrackers();

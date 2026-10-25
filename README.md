@@ -7,19 +7,20 @@
 The menu has two modes, **Boss Scuffle** and **1v1 Scuffle**. Each first asks whether you're playing **Local** (sharing one camera) or **Online** (each on your own device).
 
 - **Local Boss Scuffle** (1–2 players, 1 camera): choose how many people are playing and a difficulty, and a random monster appears: the Big Bad Wolf, the Bridge Troll, the Wicked Witch, or the Tower Dragon (never the same one twice in a row). With two players, reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
-- **Online Boss Scuffle** (up to 6 players, one device each): one player creates a private party and shares its 5-letter code or invite link, or a public party that others find by name under Browse Public Parties; everyone plays from their own device. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP is multiplied by the number of players.
+- **Online Boss Scuffle** (up to 6 players, one device each): one player creates a private party and shares its 5-letter code or invite link, or a public party that others find by name under Browse Public Parties; everyone plays from their own device. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP grows with the number of players.
 - **1v1 Scuffle** (2 players, 1 camera): a 45-second tug-of-war. Pick a difficulty and the game calls random moves from that difficulty's list, always the same move for both players at the same moment; both pause together while switching. Clean-rep streaks multiply your points. A 25-point lead wins by knockout. **Find Online Match** pairs you with another player online, each on their own device and camera; online matches are always Hard.
 
 ## Boss fights
 
 Difficulty sets the fight; the monster only changes the look and lines.
 
-| Difficulty | Boss HP per player | Time | Boss attacks every | Move switches every | Moves |
+| Difficulty | Boss HP (solo) | Time | Boss attacks every | Move switches every | Moves |
 | --- | --- | --- | --- | --- | --- |
-| Easy | 24 | 90 s | 40 s | 14–20 s | squats, punches, jumping jacks |
-| Normal | 36 | 90 s | 28 s | 10–15 s | + push-ups |
-| Hard | 50 | 100 s | 18 s | 8–12 s | + straight-arm planks |
+| Easy | 30 | 90 s | 40 s | 14–20 s | squats, punches, jumping jacks |
+| Normal | 45 | 90 s | 28 s | 10–15 s | + push-ups |
+| Hard | 60 | 100 s | 18 s | 8–12 s | + straight-arm planks |
 
+- Boss HP grows faster than the team, since teams also deal SYNC bonuses, combo multipliers, and FRENZY: each player adds the solo HP, and each player past the first adds another 30% on top (`TEAM_HP` in `js/config.js`). Two players face 2.6× the solo HP, three 4.8×, four 7.6×, six 15×.
 - Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. Push-ups are worth 1.5×, punches 0.25× (they come fast, and their co-op SYNC bonus is cut to match). A held straight-arm plank deals damage every 1.2 seconds.
 - The boss calls a random move from the difficulty's list for each player, on that player's own timer, so teammates can be on different moves at once. Each call comes as a line of dialog in the monster's speech bubble, using the player's name ("Hosty, drop and give me push-ups!"). Local players set names on the Boss Fight setup screen; remote players use their party name. Lines live in each boss's `lines` in `js/config.js`.
 - A new move counts from the player's next rep; a full-screen "SWITCH TO" callout shows it for two seconds.

@@ -22,19 +22,23 @@ export const points = { clean: 2, ok: 1, bad: 0.5 };
 export const feedback = { clean: "CLEAN", ok: "OK", bad: "SLOPPY" };
 export const HEARTS = 5, PLANK_TICK = 1200, ROPE = 25, DUEL_TIME = 45000;
 
-// Difficulty sets the fight: `hp` is per player, and the boss calls a random move
+// Difficulty sets the fight: `hp` is a solo fight's boss HP (see bossHealth for
+// teams), and the boss calls a random move
 // from `moves` for each player on their own timer of `switchEvery` [min, max] ms.
 // Every boss attack costs a heart. `attackEvery` is set so a team at a typical pace
 // loses about one heart on Easy, two on Normal, and three or four on Hard; only on
 // Hard can a slow team run out of hearts (at 90 s) before the clock does.
 // `poseEvery` [min, max] ms is how often each player is frozen for Strike a Pose.
 // `level` is only for show, on the boss's status panel.
+// Each player past the first adds this share of HP on top of their own: teams also
+// deal SYNC bonuses, combo multipliers, and FRENZY, which grow with every teammate.
+export const TEAM_HP = .3;
 export const DIFFICULTIES = {
-  easy: { name: "Easy", blurb: "Standing moves only, with slow switches.", hp: 24, time: 90, attackEvery: 40000, level: 15,
+  easy: { name: "Easy", blurb: "Standing moves only, with slow switches.", hp: 30, time: 90, attackEvery: 40000, level: 15,
     switchEvery: [14000, 20000], poseEvery: [35000, 50000], moves: ["squats", "punches", "jacks"] },
-  normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 36, time: 90, attackEvery: 28000, level: 30,
+  normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 45, time: 90, attackEvery: 28000, level: 30,
     switchEvery: [10000, 15000], poseEvery: [25000, 40000], moves: ["squats", "punches", "jacks", "pushups"] },
-  hard: { name: "Hard", blurb: "Every move, straight-arm planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 18000, level: 50,
+  hard: { name: "Hard", blurb: "Every move, straight-arm planks included, at a fast pace.", hp: 60, time: 100, attackEvery: 18000, level: 50,
     switchEvery: [8000, 12000], poseEvery: [18000, 30000], moves: ["squats", "punches", "jacks", "pushups", "plank"] }
 };
 

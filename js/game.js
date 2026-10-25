@@ -3,7 +3,7 @@
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, POSE_HOLD, POSE_LINES, POSE_TIMEOUT, POSES, REP_GAP, REP_VALUE, SWITCH_CALLOUT } from "./config.js";
 import { broadcastState } from "./party.js";
-import { activeTrackers, localTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
+import { activeTrackers, localTrackers, boss, bossHealth, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
 import { $, clearAlert, confetti, flashAndShake, fx, hideCallout, renderBattle, resetSpeech, setResults, show, showAlert, showSwitchCallout, sound, updateHud, updateTip } from "./ui.js";
 
 export function recordRep(index, quality, amount = 1, fromCamera = true) {
@@ -201,7 +201,7 @@ export function resetRound() {
     const b = boss(), level = difficulty();
     // Everyone starts on a random move; the host assigns guests theirs.
     if (!isGuest()) activeTrackers().forEach((t) => { t.exercise = pickMove(null); t.switchAt = Infinity; });
-    state.bossMax = level.hp * playerCount();
+    state.bossMax = bossHealth(playerCount());
     state.bossHp = state.bossMax;
     state.duration = level.time * 1000;
     resetSpeech(b.taunt);

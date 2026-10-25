@@ -4,7 +4,7 @@ import { ensurePoseLoop, positionLabels, prepareCamera, showFraming, stopMedia }
 import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points, POSES, SWITCH_CALLOUT } from "./config.js";
 import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound, strikePoseFor } from "./game.js";
 import { cleanCode, createParty, listPublicParties, MAX_PLAYERS } from "./network.js";
-import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
+import { bossHealth, difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { addAudioControls, applyAudio, playWithSound, startVoice, stopVoice, updateMicButton } from "./voice.js";
 import { $, confetti, EFFECTS, setResults, show, showSwitchCallout, sound, toast, updateHud, updateTip } from "./ui.js";
 
@@ -305,7 +305,7 @@ export function enterLobby() {
 }
 function renderLobby() {
   if (state.mode !== "party" || !state.party) return;
-  const host = state.party.isHost, count = playerCount(), level = difficulty();
+  const host = state.party.isHost, count = playerCount();
   // A public party is known by its name; a private one by the code to share.
   const isPublic = Boolean(state.party.isPublic);
   $("lobby-code-label").textContent = isPublic ? "PUBLIC PARTY" : "PARTY CODE";
@@ -313,7 +313,7 @@ function renderLobby() {
   $("party-code").classList.toggle("party-name", isPublic);
   $("copy-invite").hidden = isPublic;
   $("lobby-status").textContent = `${count} of ${MAX_PLAYERS} players`;
-  $("lobby-hp").textContent = `${level.hp * count} HP`;
+  $("lobby-hp").textContent = `${bossHealth(count)} HP`;
   $("boss-picker").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, item], i) => {
     const button = document.createElement("button");
     button.type = "button";
