@@ -1026,6 +1026,7 @@ body:has(#game.active) .corner {
   border: var(--stroke) solid var(--ui-accent);
   background: var(--bg-inset);
   box-shadow: var(--drop);
+  container-type: inline-size;
 }
 
 .move-row {
@@ -1054,14 +1055,15 @@ body:has(#game.active) .corner {
   color: var(--text-on-accent);
 }
 
+/* Sized to the box and free to wrap, so long moves like Straight-Arm Plank fit. */
 .move-row strong {
-  overflow: hidden;
+  flex: 1;
+  min-width: 0;
   color: var(--ui-accent-light);
-  font: clamp(26px, 3vw, 40px)/1.05 var(--font-display);
-  text-overflow: ellipsis;
+  font: clamp(20px, 9cqi, 40px)/1.05 var(--font-display);
+  overflow-wrap: anywhere;
   text-shadow: var(--drop);
   text-transform: uppercase;
-  white-space: nowrap;
   animation: callout .3s steps(3);
 }
 
@@ -2102,10 +2104,6 @@ svg.fx {
 
   .arena {
     --px: 4px;
-  }
-
-  .move-row strong {
-    font-size: 28px;
   }
 
   .status-panel {
