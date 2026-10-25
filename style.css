@@ -417,6 +417,37 @@ body:has(#game.active) .corner {
   letter-spacing: .12em;
 }
 
+/* Local or online: stacked, each with a big pixel icon beside its name. */
+.where-row {
+  grid-template-columns: 1fr;
+}
+
+.where-row .choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: center;
+  gap: 6px 22px;
+}
+
+.choice-icon {
+  grid-row: 1 / 3;
+  width: 72px;
+  color: var(--ui-accent);
+  filter: drop-shadow(4px 4px 0 var(--shadow-hard));
+}
+
+.choice:hover .choice-icon {
+  color: var(--ui-accent-light);
+}
+
+.where-row .choice strong {
+  align-self: end;
+}
+
+.where-row .choice span {
+  align-self: start;
+}
+
 /* Difficulty level: three square pips, filled up to the level. */
 .move-list {
   margin: 0;
@@ -2102,6 +2133,10 @@ svg.fx {
 
   .choice {
     min-height: 80px;
+  }
+
+  .choice-icon {
+    width: 52px;
   }
 
   .game-header {

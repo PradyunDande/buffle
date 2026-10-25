@@ -80,6 +80,11 @@ const BAT = ["X.........X", "XX..X.X..XX", "XXX.XXX.XXX", "XXXXXXXXXXX", ".XXXXX
 export const QUESTION = [".XXXXX.", "XX...XX", ".....XX", "....XX.", "...XX..", "...XX..", ".......", "...XX..", "...XX.."];
 export const GEAR = ["....XXX....", ".XX.XXX.XX.", ".XXXXXXXXX.", "..XXXXXXX..", "XXXX...XXXX", "XXXX...XXXX", "XXXX...XXXX",
   "..XXXXXXX..", ".XXXXXXXXX.", ".XX.XXX.XX.", "....XXX...."];
+// Local play: two players on one shared screen. Online: the whole world.
+export const SHARED_SCREEN = ["..X.......X..", "...X.....X...", "....X...X....", ".....X.X.....", "XXXXXXXXXXXXX", "X...........X",
+  "X..XX...XX..X", "X..XX...XX..X", "X.XXXX.XXXX.X", "X.XXXX.XXXX.X", "X...........X", "XXXXXXXXXXXXX", ".XX.......XX."];
+export const GLOBE = ["....XXXXX....", "..XX..X..XX..", ".X...X.X...X.", ".X..X...X..X.", "XXXXXXXXXXXXX", "X...X...X...X",
+  "X...X...X...X", "X...X...X...X", "XXXXXXXXXXXXX", ".X..X...X..X.", ".X...X.X...X.", "..XX..X..XX..", "....XXXXX...."];
 export function pixelArt(rows, className = "") {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");

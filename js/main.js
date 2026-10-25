@@ -5,7 +5,7 @@ import { setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound 
 import { cleanCode } from "./network.js";
 import { browseParties, cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty, setVisibility } from "./party.js";
 import { isGuest, online, saveSettings, settings, state } from "./state.js";
-import { $, GEAR, pixelArt, QUESTION, show, toast } from "./ui.js";
+import { $, GEAR, GLOBE, pixelArt, QUESTION, SHARED_SCREEN, show, toast } from "./ui.js";
 import { toggleMic } from "./voice.js";
 
 // Each mode first asks whether to play locally or online.
@@ -34,6 +34,8 @@ for (const [id, key] of [["p1-name", "name"], ["p2-name", "name2"]]) {
 }
 $("start-fight").addEventListener("click", () => { state.mode = settings.players === 2 ? "coop" : "solo"; startFight(); });
 $("how-button").append(pixelArt(QUESTION));
+$("play-local").prepend(pixelArt(SHARED_SCREEN, "choice-icon"));
+$("play-online").prepend(pixelArt(GLOBE, "choice-icon"));
 $("settings-button").append(pixelArt(GEAR));
 $("how-button").addEventListener("click", () => show("how"));
 $("settings-button").addEventListener("click", () => show("settings"));
