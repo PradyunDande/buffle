@@ -1,6 +1,6 @@
 /* Buffle: a single-page, client-side fairy-tale exercise brawler. Wires up the page. */
 
-import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
+import { positionLabels, prepareCamera, skipFraming, stopMedia, updateDebug } from "./camera.js";
 import { setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
 import { cleanCode } from "./network.js";
 import { browseParties, cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty, setVisibility } from "./party.js";
@@ -49,6 +49,7 @@ $("find-match").addEventListener("click", findMatch);
 document.querySelector("#duel-online .back").addEventListener("click", cancelMatch);
 $("leave-button").addEventListener("click", goToMenu);
 $("mic-button").addEventListener("click", toggleMic);
+$("framing-skip").addEventListener("click", skipFraming);
 $("menu-button").addEventListener("click", goToMenu);
 $("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showSetup(); });
 $("again-button").addEventListener("click", () => {

@@ -1041,6 +1041,42 @@ body:has(#game.active) .corner {
   box-shadow: 3px 3px 0 var(--shadow-hard);
 }
 
+/* The pre-match camera setup card sits just above the camera view, so players
+   can still see themselves while they step back into frame. */
+.framing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  border: var(--stroke) solid var(--ui-accent);
+  background: var(--ui-info);
+  text-align: center;
+  box-shadow: var(--drop);
+}
+
+.framing strong {
+  color: var(--ui-accent-light);
+  font: clamp(26px, 4vw, 48px)/1 var(--font-display);
+  text-transform: uppercase;
+  text-shadow: 3px 3px 0 var(--shadow-hard);
+}
+
+.framing p {
+  max-width: 640px;
+  margin: 0;
+  color: var(--text-main);
+  font-size: clamp(18px, 2.4vw, 26px);
+}
+
+.framing span {
+  color: var(--ui-accent);
+  font-size: clamp(22px, 3vw, 34px);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .player-label {
   top: 18%;
   left: 25%;
@@ -1209,17 +1245,46 @@ body:has(#game.active) .corner {
   font-size: 18px;
 }
 
+/* The countdown fills the screen with the first move and the count. */
 .countdown {
   position: fixed;
   z-index: 30;
   inset: 0;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--bg-inset) 70%, transparent);
-  color: var(--ui-accent-light);
-  font: clamp(110px, 20vw, 230px) var(--font-display);
-  text-shadow: 10px 10px 0 var(--shadow-hard);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  padding: 5vw;
+  background: color-mix(in srgb, var(--bg-inset) 92%, transparent);
+  text-align: center;
   pointer-events: none;
+}
+
+.countdown span {
+  color: var(--ui-accent);
+  font: clamp(30px, 5.5vw, 72px) var(--font-display);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.countdown strong {
+  max-width: 100%;
+  color: var(--ui-accent-light);
+  font: clamp(72px, 14vw, 220px)/.9 var(--font-display);
+  text-transform: uppercase;
+  text-shadow: 10px 10px 0 var(--shadow-hard);
+  overflow-wrap: anywhere;
+}
+
+.countdown.multi strong {
+  font-size: clamp(44px, 7vw, 120px);
+}
+
+.countdown b {
+  color: var(--text-main);
+  font: clamp(90px, 16vw, 200px)/1 var(--font-display);
+  text-shadow: 8px 8px 0 var(--shadow-hard);
 }
 
 /* Full-screen callout for a move switch or Strike a Pose, sized to read from far away. */
@@ -1286,10 +1351,6 @@ body:has(#game.active) .corner {
   background: var(--ui-accent);
 }
 
-.callout b {
-  color: var(--text-main);
-  font: clamp(60px, 10vw, 160px)/1 var(--font-display);
-}
 
 .game-error {
   position: absolute;

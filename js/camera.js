@@ -1,7 +1,7 @@
 /* Camera, pose model, and the per-frame tracking loop. */
 
 import { BONES, MODEL_URL, VISION_URL } from "./config.js";
-import { holdsPose, joint, processJack, processPlank, processPunch, processPushup, processSquat } from "./exercises.js";
+import { holdsPose, joint, processJack, processPlank, processPunch, processPushup, processSquat, pushupBelowFrame } from "./exercises.js";
 import { beginCountdown, trackPose } from "./game.js";
 import { online, resetMotion, settings, solo, state } from "./state.js";
 import { $ } from "./ui.js";
@@ -65,7 +65,7 @@ export async function prepareCamera() {
     state.lastVideoTime = -1;
     state.cameraBusy = false;
     ensurePoseLoop();
-    if (!online()) beginCountdown(state.session);
+    if (!online()) startFraming();
   } catch (error) {
     if (!current()) return;
     const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
@@ -81,11 +81,13 @@ export async function prepareCamera() {
 
 // The video and canvas are both mirrored in CSS. Assignments use mirrored x,
 // then choose the permutation nearest the previous player positions.
-// Players are placed by their hips, or by their shoulders when the hips are out of frame.
+// Players are placed by their hips, or by their shoulders when the hips are out of
+// frame. Side-on, as in a plank or push-up, the far hip and shoulder are hidden,
+// so one visible side is enough.
 function bodyPoint(landmarks) {
-  for (const [l, r] of [[23, 24], [11, 12]]) {
-    const a = joint(landmarks, l), b = joint(landmarks, r);
-    if (a && b) return { x: 1 - (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  for (const pair of [[23, 24], [11, 12]]) {
+    const seen = pair.map((i) => joint(landmarks, i)).filter(Boolean);
+    if (seen.length) return { x: 1 - seen.reduce((sum, p) => sum + p.x, 0) / seen.length, y: seen.reduce((sum, p) => sum + p.y, 0) / seen.length };
   }
   return null;
 }
@@ -161,6 +163,48 @@ export function updateDebug() {
     `P${i + 1} ${p.exercise ?? "—"}: ${p.angle === null ? "—" : p.angle.toFixed(p.unit === "×" ? 2 : 1)}${p.unit}${p.method ? ` (${p.method})` : ""} | ${p.phase} | vis ${p.visibility.toFixed(2)} | ${p.form}`
   ).join("\n") + `\nFPS: ${state.fps.toFixed(1)}`;
 }
+// Before a local match, the camera should be on the floor, tilted up, with every
+// player in view from head to knees; the feet can be out of frame. The countdown
+// starts once everyone has been in frame for a second, or on Start anyway. Online, the same
+// card guides each player in the lobby while the host decides when to start.
+export function startFraming() {
+  state.status = "framing";
+  state.framedSince = 0;
+  showFraming(true);
+}
+export function showFraming(canSkip) {
+  $("framing").hidden = false;
+  $("framing-skip").hidden = !canSkip;
+  $("framing-status").textContent = "Step in front of the camera";
+}
+export function skipFraming() {
+  if (state.status !== "framing") return;
+  $("framing").hidden = true;
+  state.status = "loading";
+  beginCountdown(state.session);
+}
+function checkFraming(assigned, needed, now) {
+  const who = (i) => needed > 1 ? `P${i + 1}: ` : "";
+  let problem = null;
+  for (let i = 0; i < needed && !problem; i++) {
+    const entry = assigned[i];
+    if (!entry) problem = i ? "Waiting for P2 to step in" : "Step in front of the camera";
+    else if (!joint(entry.landmarks, 25) || !joint(entry.landmarks, 26)) problem = `${who(i)}Step back until your legs are in frame`;
+    else if (!joint(entry.landmarks, 0)) problem = `${who(i)}Tilt the camera up until your head is in frame`;
+  }
+  if (problem) {
+    state.framedSince = 0;
+    $("framing").hidden = false;
+    $("framing-status").textContent = problem;
+    return;
+  }
+  state.framedSince ||= now;
+  $("framing-status").textContent = "Perfect, hold still…";
+  if (now - state.framedSince < 1000) return;
+  if (state.status === "framing") skipFraming();
+  else $("framing").hidden = true;
+}
+
 function poseLoop(now) {
   if (state.screen !== "game" || !state.stream || !state.landmarker) { state.raf = 0; return; }
   const video = $("camera");
@@ -170,13 +214,16 @@ function poseLoop(now) {
       const result = state.landmarker.detectForVideo(video, now);
       const assigned = assignPlayers(result, now);
       const needed = solo() ? 1 : 2;
-      const detected = assigned.filter(Boolean).length;
-      $("waiting").hidden = solo() || detected >= needed;
+      // A player who dipped below the frame at the bottom of a push-up still counts as there.
+      const hidden = state.trackers.slice(0, needed).filter((t, i) => !assigned[i] && pushupBelowFrame(i, now)).length;
+      const detected = assigned.filter(Boolean).length + hidden;
+      $("waiting").hidden = solo() || detected >= needed || state.status !== "playing";
       if (!solo() && detected < 2) $("waiting").textContent = "Waiting for P2…";
+      if (state.status === "framing" || state.status === "lobby") checkFraming(assigned, needed, now);
       if (detected < needed) {
         // Discard a half-finished movement while scoring is paused. Otherwise
         // someone returning to frame could complete a rep they did not do.
-        state.trackers.forEach((t) => { resetMotion(t); t.visibility = 0; });
+        state.trackers.forEach((t) => { resetMotion(t); t.visibility = 0; t.belowFrame = false; });
       }
       const aspect = video.videoWidth / video.videoHeight;
       assigned.forEach((entry, index) => {
@@ -184,11 +231,10 @@ function poseLoop(now) {
         const t = state.trackers[index];
         t.x = entry.point.x; t.y = entry.point.y; t.seenAt = now;
         // A missing teammate pauses camera scoring.
-        // Each player is tracked on their own move, and not while switching to it.
-        if (state.status !== "playing" || detected < needed || now < t.readyAt) return;
+        if (state.status !== "playing" || detected < needed) return;
         // A frozen player is only watched for the pose they were called to strike.
         if (t.pose) { trackPose(index, holdsPose(t.pose, entry.landmarks, aspect), now); return; }
-        if (t.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
+        if (t.exercise === "squats") processSquat(index, entry.landmarks, entry.world, aspect, now);
         else if (t.exercise === "jacks") processJack(index, entry.landmarks, now);
         else if (t.exercise === "plank") processPlank(index, entry.landmarks, aspect, now);
         else if (t.exercise === "punches") processPunch(index, entry.landmarks, entry.world, aspect, now);

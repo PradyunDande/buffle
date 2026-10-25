@@ -1,9 +1,9 @@
 /* The fight loop: scoring reps, boss move calls and attacks, the clock, and results. */
 
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, POSE_HOLD, POSE_LINES, POSE_TIMEOUT, POSES, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
+import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, POSE_HOLD, POSE_LINES, POSE_TIMEOUT, POSES, REP_GAP, REP_VALUE, SWITCH_CALLOUT } from "./config.js";
 import { broadcastState } from "./party.js";
-import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
+import { activeTrackers, localTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
 import { $, clearAlert, confetti, flashAndShake, fx, hideCallout, renderSprite, resetSpeech, setResults, show, showAlert, showSwitchCallout, sound, updateHud, updateTip } from "./ui.js";
 
 export function recordRep(index, quality, amount = 1, fromCamera = true) {
@@ -11,7 +11,7 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   const now = performance.now();
   const player = state.trackers[index];
   // A player frozen by Strike a Pose can't attack until they strike it.
-  if (!player || player.pose || now < player.readyAt || (fromCamera && now - player.lastRepAt < (REP_GAP[player.exercise] ?? 400))) return;
+  if (!player || player.pose || (fromCamera && now - player.lastRepAt < (REP_GAP[player.exercise] ?? 400))) return;
   player.lastRepAt = now;
   if (isGuest()) {
     // The host keeps score; a guest only reports its own reps.
@@ -75,15 +75,13 @@ function pickMove(current) {
   const options = difficulty().moves.filter((move) => move !== current);
   return options.length ? options[Math.floor(Math.random() * options.length)] : current;
 }
-// The boss calls a new move for one player. Only that player's reps pause while
-// they change position; everyone else keeps fighting. In 1v1 both players get
-// the same move, so `move` is picked once for both.
+// The boss calls a new move for one player; it counts from the next rep. In 1v1
+// both players get the same move, so `move` is picked once for both.
 function switchMove(index, now, move = pickMove(state.trackers[index].exercise)) {
   const t = state.trackers[index];
   t.exercise = move;
   resetMotion(t);
-  t.readyAt = now + (SWITCH_PAUSE[t.exercise] ?? 3000);
-  t.switchAt = t.readyAt + randomBetween(difficulty().switchEvery);
+  t.switchAt = now + randomBetween(difficulty().switchEvery);
   state.lastEvents[index] = null;
   const name = NAMES[t.exercise].toUpperCase();
   const duel = state.mode === "duel";
@@ -95,7 +93,7 @@ function switchMove(index, now, move = pickMove(state.trackers[index].exercise))
   // Guests announce their own switches when the next state update arrives.
   if (duel ? index === 0 : !online() || index === state.myIndex) {
     fx("sound", "warn");
-    showSwitchCallout(solo() || duel ? "" : `P${index + 1} · `, NAMES[t.exercise], t.readyAt);
+    showSwitchCallout(solo() || duel ? "" : `P${index + 1} · `, NAMES[t.exercise], now + SWITCH_CALLOUT);
   }
   updateTip();
 }
@@ -114,7 +112,7 @@ function scheduleMoves(now) {
 }
 
 // Strike a Pose. Each player gets frozen on their own random timer, never while
-// switching or down on the floor for push-ups or a plank.
+// down on the floor for push-ups or a plank.
 function schedulePoses(now) {
   const every = difficulty().poseEvery;
   activeTrackers().forEach((t, i) => {
@@ -124,7 +122,7 @@ function schedulePoses(now) {
     }
     if (t.poseAt === Infinity) t.poseAt = now + randomBetween(every);
     if (now < t.poseAt) return;
-    if (now < t.readyAt || t.exercise === "plank" || t.exercise === "pushups") { t.poseAt = now + 4000; return; }
+    if (t.exercise === "plank" || t.exercise === "pushups") { t.poseAt = now + 4000; return; }
     startPose(i, now);
   });
 }
@@ -232,6 +230,7 @@ export function resetRound() {
   }
   $("game-error").hidden = true;
   $("countdown").hidden = true;
+  $("framing").hidden = true;
   clearAlert();
   updateHud();
   positionLabels();
@@ -254,15 +253,20 @@ export function beginCountdown(session) {
   if (session !== state.session || state.status !== "loading") return;
   state.status = "countdown";
   $("game-error").hidden = true;
-  const box = $("countdown");
+  const box = $("countdown"), value = $("countdown-value");
+  // The countdown fills the screen with each local player's first move.
+  const moves = localTrackers().map((t) => t.exercise);
+  const many = new Set(moves).size > 1;
+  $("countdown-move").textContent = many ? moves.map((move, i) => `P${i + 1}: ${NAMES[move] ?? "—"}`).join("  ·  ") : NAMES[moves[0]] ?? "";
+  box.classList.toggle("multi", many);
   box.hidden = false;
   let count = 3;
-  box.textContent = String(count);
+  value.textContent = String(count);
   state.countdownTimer = setInterval(() => {
     if (session !== state.session) { clearInterval(state.countdownTimer); return; }
     count--;
-    if (count > 0) { box.textContent = String(count); sound("hit"); return; }
-    if (count === 0) { box.textContent = state.mode === "duel" ? "GO!" : "FIGHT!"; sound("sync"); if (!isGuest()) startClock(session); return; }
+    if (count > 0) { value.textContent = String(count); sound("hit"); return; }
+    if (count === 0) { value.textContent = state.mode === "duel" ? "GO!" : "FIGHT!"; sound("sync"); if (!isGuest()) startClock(session); return; }
     box.hidden = true;
     clearInterval(state.countdownTimer);
     state.countdownTimer = 0;
@@ -285,11 +289,6 @@ function startClock(session) {
     if (session !== state.session || state.status !== "playing") return;
     const now = performance.now();
     const bossFight = state.mode !== "duel";
-    // While every player is changing position, the clock and the boss wait.
-    if (activeTrackers().every((t) => now < t.readyAt)) {
-      state.endAt += now - state.lastTickAt;
-      state.nextAttackAt += now - state.lastTickAt;
-    }
     state.lastTickAt = now;
     $("time-value").textContent = String(Math.max(0, Math.ceil((state.endAt - now) / 1000)));
     if (state.combo && teamMode() && activeTrackers().some((p) => now - p.lastEventAt > 4000)) {

@@ -1,7 +1,7 @@
 /* Remote party gameplay: lobby, roster, host-to-guest sync, and the camera grid. */
 
-import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points, POSES } from "./config.js";
+import { ensurePoseLoop, positionLabels, prepareCamera, showFraming, stopMedia } from "./camera.js";
+import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points, POSES, SWITCH_CALLOUT } from "./config.js";
 import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound, strikePoseFor } from "./game.js";
 import { cleanCode, createParty, listPublicParties, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
@@ -227,8 +227,7 @@ export function broadcastState(now) {
     hearts: state.hearts, combo: state.combo,
     frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
     reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise), scores: state.scores,
-    poses: state.trackers.map((t) => t.pose),
-    ready: state.trackers.map((t) => Math.max(0, Math.round(t.readyAt - now))) });
+    poses: state.trackers.map((t) => t.pose) });
 }
 function applyMoves(moves) {
   state.partyMoves = Array.isArray(moves) ? moves.map((move) => Object.hasOwn(NAMES, move) ? move : null) : [];
@@ -242,10 +241,8 @@ function applyMoves(moves) {
 function applySnapshot(snapshot) {
   if (snapshot.status !== "playing") return;
   const t = state.trackers[0];
-  const ready = Math.max(0, Number(snapshot.ready?.[state.myIndex]) || 0);
   const hadMove = Boolean(t.exercise);
-  if (applyMoves(snapshot.moves) && hadMove) showSwitchCallout("", NAMES[t.exercise], performance.now() + ready);
-  t.readyAt = performance.now() + ready;
+  if (applyMoves(snapshot.moves) && hadMove) showSwitchCallout("", NAMES[t.exercise], performance.now() + SWITCH_CALLOUT);
   // Strike a Pose: the host decides who is frozen; this guest watches for its own pose.
   const pose = snapshot.poses?.[state.myIndex];
   const frozen = typeof pose === "string" && Object.hasOwn(POSES, pose) ? pose : null;
@@ -283,7 +280,8 @@ export function enterLobby() {
   $("game-title").textContent = duel ? `VS ${state.roster.find((m) => m.id !== state.party.id)?.name || "Opponent"}` : "Party Lobby";
   // A matched 1v1 has nothing to set up: the host starts it once cameras have had a moment.
   if (duel && isHost()) state.lobbyTimer = setTimeout(hostStart, 5000);
-  $("pose-tip").textContent = "Each player needs their own camera with their full body in view.";
+  $("pose-tip").textContent = "Put your camera on the floor, tilted up at you, with your whole body in frame.";
+  showFraming(false);
   show("game");
   renderTiles();
   renderLobby();

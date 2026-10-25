@@ -7,7 +7,7 @@ export const state = {
   screen: "menu", mode: "solo", bossIndex: 0,
   difficulty: Object.hasOwn(DIFFICULTIES, settings.difficulty) ? settings.difficulty : "normal",
   status: "idle", session: 0, stream: null, landmarker: null,
-  modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, lobbyTimer: 0, alertTimer: 0,
+  modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, lobbyTimer: 0, alertTimer: 0, framedSince: 0,
   lastVideoTime: -1, lastFrameAt: 0, fps: 0,
   trackers: [newTracker(), newTracker()],
   combo: 0, bestCombo: 0, frenzyUntil: 0, cleanEvents: 0, repEvents: 0,
@@ -38,22 +38,24 @@ export function playerName(index) {
 }
 
 export function newTracker() {
-  // `exercise` is this player's current move; reps are ignored until `readyAt`.
+  // `exercise` is this player's current move.
   // While `pose` is set the player is frozen until they strike it (Strike a Pose).
-  return { x: null, y: null, seenAt: 0, phase: "UP", angles: [], angle: null, exercise: null, readyAt: 0, switchAt: 0,
+  return { x: null, y: null, seenAt: 0, phase: "UP", angles: [], angle: null, exercise: null, switchAt: 0,
     pose: null, poseAt: Infinity, poseUntil: 0, poseHeld: 0, poseSent: false,
-    visibility: 0, minAngle: 180, maxLean: 0, cleanJack: false, straight: false,
-    holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, maxDepth: 0, arms: newArms(),
+    belowFrame: false, belowSince: 0, armSeenAt: -Infinity, lastShoulderY: 0, lastStraight: true,
+    visibility: 0, minAngle: 180, cleanJack: false, straight: false,
+    holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, arms: newArms(),
     form: "—", reps: 0, lastRepAt: -Infinity, lastEventAt: 0 };
 }
 function newArms() { return [{ phase: "GUARD", max: 0 }, { phase: "GUARD", max: 0 }]; }
 // Drop any half-finished movement, keeping the player's position for assignment.
 export function resetMotion(t) {
-  t.phase = "UP"; t.angles = []; t.angle = null; t.minAngle = 180; t.maxLean = 0;
+  t.phase = "UP"; t.angles = []; t.angle = null; t.minAngle = 180;
   t.cleanJack = false; t.straight = false; t.holdStart = 0; t.holdMin = 180;
-  t.method = null; t.topY = null; t.maxDepth = 0; t.arms = newArms();
+  t.method = null; t.topY = null; t.arms = newArms();
   // A pose hold must be continuous: losing sight of the player starts it over.
   t.poseHeld = 0;
+  t.belowFrame = false;
 }
 
 function loadSettings() {

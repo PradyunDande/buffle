@@ -3,19 +3,20 @@
 export const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 export const VISION_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
 export const NAMES = { squats: "Squats", jacks: "Jumping Jacks", pushups: "Push-ups", plank: "Plank", punches: "Punches" };
+// Tips assume the camera is on the floor, tilted up, with the whole body in frame.
 export const TIPS = {
-  squats: "Face the camera. Head and shoulders in frame is enough.",
-  jacks: "Face the camera and reach your hands above your head.",
-  pushups: "Turn sideways so the camera sees your arm bend.",
-  plank: "Get down sideways to the camera and hold a straight line.",
-  punches: "Face the camera, guard up, and punch at shoulder height."
+  squats: "Face the camera and sit down low, thighs toward the floor.",
+  jacks: "Face the camera: hands all the way up, feet out wide.",
+  pushups: "Turn sideways to the camera, body straight from head to heels.",
+  plank: "Turn sideways to the camera and hold a straight line.",
+  punches: "Face the camera, guard up, and punch at chest height."
 };
 // Damage per rep relative to a squat. Punches come fast, so each is worth less.
 export const REP_VALUE = { squats: 1, jacks: 1, pushups: 1.5, plank: 1, punches: .5 };
 // The shortest time between two camera reps from one player.
 export const REP_GAP = { punches: 200 };
-// How long a player's reps pause after the boss calls a new move; floor moves need longer.
-export const SWITCH_PAUSE = { plank: 5000, pushups: 5000 };
+// How long the full-screen "SWITCH TO" callout stays up; reps count right away.
+export const SWITCH_CALLOUT = 2000;
 export const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 export const points = { clean: 2, ok: 1, bad: 0.5 };
 export const feedback = { clean: "CLEAN", ok: "OK", bad: "SLOPPY" };

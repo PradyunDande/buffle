@@ -174,14 +174,13 @@ export function updateHud() {
   renderCallout();
 }
 
-// The HUD names each local player's move, and "GET READY" while they switch.
+// The HUD names each local player's move, and "FROZEN" during Strike a Pose.
 function moveLabel() {
-  const now = performance.now();
-  const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${t.pose ? " · FROZEN" : now < t.readyAt ? " · GET READY" : ""}`);
+  const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${t.pose ? " · FROZEN" : ""}`);
   return moves.length === 1 ? `${online() ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
 }
 // Full-screen callouts for the player who has to act, big enough to read from across
-// the room: a move switch counts down until reps count again, and Strike a Pose
+// the room: a move switch shows for a moment, and Strike a Pose
 // stays up with a hold bar until the pose is struck or the spell wears off.
 // Only this device's players get them; a pose outranks a switch.
 const callout = { who: "", move: "", until: 0, timer: 0 };
@@ -209,14 +208,12 @@ function renderCallout() {
     const held = Math.max(...posing.map(({ t }) => t.poseHeld ? (now - t.poseHeld) / POSE_HOLD : 0));
     $("callout-hold").hidden = false;
     $("callout-hold-fill").style.width = `${Math.min(100, held * 100)}%`;
-    $("callout-count").textContent = "";
   } else if (playing && now < callout.until) {
     box.className = "callout switch";
     $("callout-label").textContent = `${callout.who}Switch to`;
     $("callout-title").textContent = callout.move;
     $("callout-hint").textContent = "";
     $("callout-hold").hidden = true;
-    $("callout-count").textContent = String(Math.ceil((callout.until - now) / 1000));
   } else {
     box.hidden = true;
     return;
