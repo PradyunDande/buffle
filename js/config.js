@@ -26,14 +26,28 @@ export const HEARTS = 5, PLANK_TICK = 1200, ROPE = 25, DUEL_TIME = 45000;
 // Every boss attack costs a heart. `attackEvery` is set so a team at a typical pace
 // loses about one heart on Easy, two on Normal, and three or four on Hard; only on
 // Hard can a slow team run out of hearts (at 90 s) before the clock does.
+// `poseEvery` [min, max] ms is how often each player is frozen for Strike a Pose.
 export const DIFFICULTIES = {
   easy: { name: "Easy", blurb: "Standing moves only, with slow switches.", hp: 24, time: 90, attackEvery: 40000,
-    switchEvery: [14000, 20000], moves: ["squats", "punches", "jacks"] },
+    switchEvery: [14000, 20000], poseEvery: [35000, 50000], moves: ["squats", "punches", "jacks"] },
   normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 36, time: 90, attackEvery: 28000,
-    switchEvery: [10000, 15000], moves: ["squats", "punches", "jacks", "pushups"] },
+    switchEvery: [10000, 15000], poseEvery: [25000, 40000], moves: ["squats", "punches", "jacks", "pushups"] },
   hard: { name: "Hard", blurb: "Every move, planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 18000,
-    switchEvery: [8000, 12000], moves: ["squats", "punches", "jacks", "pushups", "plank"] }
+    switchEvery: [8000, 12000], poseEvery: [18000, 30000], moves: ["squats", "punches", "jacks", "pushups", "plank"] }
 };
+
+// Strike a Pose: now and then the boss freezes one player, who can't deal damage
+// until they hold the called pose for POSE_HOLD ms. The spell wears off after
+// POSE_TIMEOUT ms so a pose the camera can't see never leaves anyone stuck.
+export const POSES = {
+  handsUp: { name: "Hands Up", hint: "Both hands high above your head" },
+  tPose: { name: "T-Pose", hint: "Arms straight out to the sides" },
+  flex: { name: "Flex", hint: "Elbows out at shoulder height, fists up" },
+  headTouch: { name: "Hands on Head", hint: "Both hands on top of your head" }
+};
+export const POSE_HOLD = 600, POSE_TIMEOUT = 12000;
+// What the monster says when it freezes someone: `{name}` is the player, `{pose}` the pose.
+export const POSE_LINES = ["Freeze, {name}! Strike a pose: {pose}!", "{name}, you're under my spell! {pose}, now!", "Not so fast, {name}. {pose}!"];
 
 // What a monster tells a player to do when it calls a new move, filling `{command}` in its lines.
 export const COMMANDS = {

@@ -1,7 +1,7 @@
 /* The fight loop: scoring reps, boss move calls and attacks, the clock, and results. */
 
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
+import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, POSE_HOLD, POSE_LINES, POSE_TIMEOUT, POSES, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
 import { broadcastState } from "./party.js";
 import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
 import { $, clearAlert, confetti, flashAndShake, fx, renderSprite, resetSpeech, setResults, show, showAlert, sound, updateHud, updateTip } from "./ui.js";
@@ -10,7 +10,8 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
   const now = performance.now();
   const player = state.trackers[index];
-  if (!player || now < player.readyAt || (fromCamera && now - player.lastRepAt < (REP_GAP[player.exercise] ?? 400))) return;
+  // A player frozen by Strike a Pose can't attack until they strike it.
+  if (!player || player.pose || now < player.readyAt || (fromCamera && now - player.lastRepAt < (REP_GAP[player.exercise] ?? 400))) return;
   player.lastRepAt = now;
   if (isGuest()) {
     // The host keeps score; a guest only reports its own reps.
@@ -109,7 +110,68 @@ function scheduleMoves(now) {
     second.switchAt = first.switchAt;
     return;
   }
-  activeTrackers().forEach((t, i) => { if (now >= t.switchAt) switchMove(i, now); });
+  activeTrackers().forEach((t, i) => { if (now >= t.switchAt && !t.pose) switchMove(i, now); });
+}
+
+// Strike a Pose. Each player gets frozen on their own random timer, never while
+// switching or down on the floor for push-ups or a plank.
+function schedulePoses(now) {
+  const every = difficulty().poseEvery;
+  activeTrackers().forEach((t, i) => {
+    if (t.pose) {
+      if (now >= t.poseUntil) endPose(i, now, false);
+      return;
+    }
+    if (t.poseAt === Infinity) t.poseAt = now + randomBetween(every);
+    if (now < t.poseAt) return;
+    if (now < t.readyAt || t.exercise === "plank" || t.exercise === "pushups") { t.poseAt = now + 4000; return; }
+    startPose(i, now);
+  });
+}
+function startPose(index, now) {
+  const t = state.trackers[index];
+  const keys = Object.keys(POSES);
+  t.pose = keys[Math.floor(Math.random() * keys.length)];
+  t.poseUntil = now + POSE_TIMEOUT;
+  t.poseHeld = 0;
+  resetMotion(t);
+  const pose = POSES[t.pose].name;
+  const line = POSE_LINES[Math.floor(Math.random() * POSE_LINES.length)];
+  fx("bossSay", line.replace("{name}", () => playerName(index)).replace("{pose}", () => pose));
+  fx("floatText", index, "FROZEN!", "bad");
+  fx("sound", "warn");
+  if (!online() || index === state.myIndex) {
+    showAlert(`${solo() ? "" : `P${index + 1}: `}STRIKE A POSE: ${pose.toUpperCase()}!`, "phase", POSE_TIMEOUT);
+  }
+  updateHud();
+}
+// `struck` is false when the spell simply wore off.
+function endPose(index, now, struck) {
+  const t = state.trackers[index];
+  t.pose = null;
+  t.poseHeld = 0;
+  t.poseAt = now + randomBetween(difficulty().poseEvery);
+  fx("floatText", index, struck ? "NICE POSE!" : "SPELL WORE OFF", struck ? "sync" : "");
+  if (struck) fx("sound", "sync");
+  if (!online() || index === state.myIndex) showAlert(struck ? "NICE POSE!" : "THE SPELL WORE OFF", struck ? "good" : "phase", 1200);
+  updateHud();
+}
+// Called every camera frame for a frozen player: holding the pose for POSE_HOLD
+// strikes it. A guest tells the host, which keeps everyone's state.
+export function trackPose(index, matched, now) {
+  const t = state.trackers[index];
+  if (!t?.pose || state.status !== "playing") return;
+  if (!matched) { t.poseHeld = 0; return; }
+  t.poseHeld ||= now;
+  if (now - t.poseHeld < POSE_HOLD) return;
+  if (isGuest()) {
+    if (!t.poseSent) { t.poseSent = true; state.party.send({ t: "posed" }); }
+    return;
+  }
+  endPose(index, now, true);
+}
+export function strikePoseFor(index) {
+  if (state.trackers[index]?.pose && state.status === "playing") endPose(index, performance.now(), true);
 }
 
 // Boss attacks always land: each one costs the team a heart.
@@ -237,6 +299,7 @@ function startClock(session) {
     }
     scheduleMoves(now);
     if (bossFight) {
+      schedulePoses(now);
       bossAttack(now);
       if (state.status !== "playing") return;
     }

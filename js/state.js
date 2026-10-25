@@ -39,7 +39,9 @@ export function playerName(index) {
 
 export function newTracker() {
   // `exercise` is this player's current move; reps are ignored until `readyAt`.
+  // While `pose` is set the player is frozen until they strike it (Strike a Pose).
   return { x: null, y: null, seenAt: 0, phase: "UP", angles: [], angle: null, exercise: null, readyAt: 0, switchAt: 0,
+    pose: null, poseAt: Infinity, poseUntil: 0, poseHeld: 0, poseSent: false,
     visibility: 0, minAngle: 180, maxLean: 0, cleanJack: false, straight: false,
     holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, maxDepth: 0, arms: newArms(),
     form: "—", reps: 0, lastRepAt: -Infinity, lastEventAt: 0 };
@@ -50,6 +52,8 @@ export function resetMotion(t) {
   t.phase = "UP"; t.angles = []; t.angle = null; t.minAngle = 180; t.maxLean = 0;
   t.cleanJack = false; t.straight = false; t.holdStart = 0; t.holdMin = 180;
   t.method = null; t.topY = null; t.maxDepth = 0; t.arms = newArms();
+  // A pose hold must be continuous: losing sight of the player starts it over.
+  t.poseHeld = 0;
 }
 
 function loadSettings() {

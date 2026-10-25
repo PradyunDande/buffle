@@ -189,6 +189,30 @@ export function processPunch(index, landmarks, world, aspect, now) {
   t.unit = "°";
   t.phase = t.arms.map((arm) => arm.phase === "OUT" ? "OUT" : "IN").join("/");
 }
+// Strike a Pose: whether the upper body matches the called pose. Distances are in
+// shoulder widths, so they hold at any distance from the camera; the poses are
+// symmetric, so the mirrored camera doesn't matter.
+export function holdsPose(pose, landmarks, aspect) {
+  const points = [0, 11, 12, 13, 14, 15, 16].map((i) => joint(landmarks, i));
+  if (points.some((p) => !p)) return false;
+  const [nose, ls, rs, le, re, lw, rw] = points;
+  const width = Math.hypot((ls.x - rs.x) * aspect, ls.y - rs.y);
+  if (width < .05) return false;
+  const slack = settings.sensitivity * .01;
+  const apart = (a, b) => Math.hypot((a.x - b.x) * aspect, a.y - b.y) / width;
+  const above = (a, b, by) => (b.y - a.y) / width > by;
+  const level = (a, b, within) => Math.abs(a.y - b.y) / width < within;
+  switch (pose) {
+    case "handsUp": return above(lw, nose, .5 - slack) && above(rw, nose, .5 - slack);
+    case "tPose": return level(lw, ls, .5 + slack) && level(rw, rs, .5 + slack) && level(le, ls, .4 + slack) && level(re, rs, .4 + slack)
+      && apart(lw, rw) > 2.6 - slack * 2;
+    case "flex": return level(le, ls, .5 + slack) && level(re, rs, .5 + slack) && above(lw, le, .4 - slack) && above(rw, re, .4 - slack)
+      && apart(le, re) > 1.6 - slack;
+    case "headTouch": return apart(lw, nose) < 1 + slack && apart(rw, nose) < 1 + slack && above(lw, ls, .3) && above(rw, rs, .3);
+    default: return false;
+  }
+}
+
 // A plank scores one tick per PLANK_TICK held with the body near horizontal.
 // The tick's quality comes from the most the hips sagged or piked during it.
 export function processPlank(index, landmarks, aspect, now) {

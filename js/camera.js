@@ -1,8 +1,8 @@
 /* Camera, pose model, and the per-frame tracking loop. */
 
 import { BONES, MODEL_URL, VISION_URL } from "./config.js";
-import { joint, processJack, processPlank, processPunch, processPushup, processSquat } from "./exercises.js";
-import { beginCountdown } from "./game.js";
+import { holdsPose, joint, processJack, processPlank, processPunch, processPushup, processSquat } from "./exercises.js";
+import { beginCountdown, trackPose } from "./game.js";
 import { online, resetMotion, settings, solo, state } from "./state.js";
 import { $ } from "./ui.js";
 import { publishStream } from "./voice.js";
@@ -186,6 +186,8 @@ function poseLoop(now) {
         // A missing teammate pauses camera scoring.
         // Each player is tracked on their own move, and not while switching to it.
         if (state.status !== "playing" || detected < needed || now < t.readyAt) return;
+        // A frozen player is only watched for the pose they were called to strike.
+        if (t.pose) { trackPose(index, holdsPose(t.pose, entry.landmarks, aspect), now); return; }
         if (t.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
         else if (t.exercise === "jacks") processJack(index, entry.landmarks, now);
         else if (t.exercise === "plank") processPlank(index, entry.landmarks, aspect, now);

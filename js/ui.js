@@ -1,6 +1,6 @@
 /* DOM helpers, sound and visual effects, sprites, and the in-fight HUD. */
 
-import { HEARTS, NAMES, TIPS } from "./config.js";
+import { HEARTS, NAMES, POSE_HOLD, POSES, TIPS } from "./config.js";
 import { tileFor, updateTileNames } from "./party.js";
 import { comboMultiplier, isFrenzy, isHost, localTrackers, online, number, rope, scoreText, settings, state } from "./state.js";
 
@@ -162,6 +162,7 @@ export function updateHud() {
     $("boss-hp-fill").style.width = `${state.bossHp / state.bossMax * 100}%`;
     $("boss-hp-label").textContent = `${Math.ceil(state.bossHp)} / ${state.bossMax} HP`;
     $("move-label").textContent = moveLabel();
+    updatePoseCall();
     renderHearts(state.hearts);
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
   }
@@ -176,8 +177,20 @@ export function updateHud() {
 // The HUD names each local player's move, and "GET READY" while they switch.
 function moveLabel() {
   const now = performance.now();
-  const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${now < t.readyAt ? " · GET READY" : ""}`);
+  const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${t.pose ? " · FROZEN" : now < t.readyAt ? " · GET READY" : ""}`);
   return moves.length === 1 ? `${online() ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
+}
+// The Strike a Pose prompt sits on this device's camera: the pose, how to do it,
+// and a bar that fills while it's held.
+function updatePoseCall() {
+  const posing = localTrackers().map((t, i) => ({ t, i })).filter(({ t }) => t.pose);
+  $("pose-call").hidden = !posing.length;
+  if (!posing.length) return;
+  const label = (i) => localTrackers().length > 1 ? `P${i + 1}: ` : "";
+  $("pose-name").textContent = posing.map(({ t, i }) => `${label(i)}${POSES[t.pose].name}`).join("  ·  ");
+  $("pose-hint").textContent = posing.length === 1 ? POSES[posing[0].t.pose].hint : "";
+  const held = Math.max(...posing.map(({ t }) => t.poseHeld ? (performance.now() - t.poseHeld) / POSE_HOLD : 0));
+  $("pose-hold-fill").style.width = `${Math.min(100, held * 100)}%`;
 }
 export function updateTip() {
   const moves = [...new Set(localTrackers().map((t) => t.exercise).filter(Boolean))];

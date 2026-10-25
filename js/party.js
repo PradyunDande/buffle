@@ -1,8 +1,8 @@
 /* Remote party gameplay: lobby, roster, host-to-guest sync, and the camera grid. */
 
 import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
-import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
+import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points, POSE_TIMEOUT, POSES } from "./config.js";
+import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound, strikePoseFor } from "./game.js";
 import { cleanCode, createParty, listPublicParties, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { addAudioControls, applyAudio, playWithSound, startVoice, stopVoice, updateMicButton } from "./voice.js";
@@ -203,6 +203,8 @@ function onPartyMessage(from, message) {
     const index = state.roster.findIndex((m) => m.id === from);
     if (message.t === "rep" && index > 0 && Object.hasOwn(points, message.quality) && (message.amount === 1 || message.amount === .5)) {
       recordRep(index, message.quality, message.amount, false);
+    } else if (message.t === "posed" && index > 0) {
+      strikePoseFor(index);
     } else if (message.t === "rematch" && state.mode === "duel" && state.screen === "results") {
       hostStart();
     }
@@ -225,6 +227,7 @@ export function broadcastState(now) {
     hearts: state.hearts, combo: state.combo,
     frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
     reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise), scores: state.scores,
+    poses: state.trackers.map((t) => t.pose),
     ready: state.trackers.map((t) => Math.max(0, Math.round(t.readyAt - now))) });
 }
 function applyMoves(moves) {
@@ -243,6 +246,11 @@ function applySnapshot(snapshot) {
   const hadMove = Boolean(t.exercise);
   if (applyMoves(snapshot.moves) && hadMove) showAlert(`SWITCH TO ${NAMES[t.exercise].toUpperCase()}!`, "phase", Math.max(1500, ready));
   t.readyAt = performance.now() + ready;
+  // Strike a Pose: the host decides who is frozen; this guest watches for its own pose.
+  const pose = snapshot.poses?.[state.myIndex];
+  const frozen = typeof pose === "string" && Object.hasOwn(POSES, pose) ? pose : null;
+  if (frozen && frozen !== t.pose) showAlert(`STRIKE A POSE: ${POSES[frozen].name.toUpperCase()}!`, "phase", POSE_TIMEOUT);
+  if (frozen !== t.pose) { t.pose = frozen; t.poseHeld = 0; t.poseSent = false; if (frozen) resetMotion(t); }
   state.status = "playing";
   state.bossHp = Number(snapshot.hp) || 0;
   state.bossMax = Number(snapshot.max) || 1;
