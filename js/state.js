@@ -7,30 +7,32 @@ export const state = {
   screen: "menu", mode: "solo", bossIndex: 0,
   difficulty: Object.hasOwn(DIFFICULTIES, settings.difficulty) ? settings.difficulty : "normal",
   status: "idle", session: 0, stream: null, landmarker: null,
-  modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, alertTimer: 0,
+  modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, lobbyTimer: 0, alertTimer: 0,
   lastVideoTime: -1, lastFrameAt: 0, fps: 0, keyboardOnly: false,
   trackers: [newTracker(), newTracker()],
   combo: 0, bestCombo: 0, frenzyUntil: 0, cleanEvents: 0, repEvents: 0,
   lastEvents: [null, null], endAt: 0, duration: 0, lastTickAt: 0,
   bossHp: 0, bossMax: 0, hearts: HEARTS, attack: null, nextAttackAt: 0, parries: 0,
   scores: [0, 0], cameraToken: 0, cameraBusy: false,
-  party: null, roster: [], myIndex: 0, partyReps: [], partyMoves: [], remoteStreams: new Map(),
+  party: null, searching: false, roster: [], myIndex: 0, partyReps: [], partyMoves: [], remoteStreams: new Map(),
   audio: null, toastTimer: 0
 };
-// In a remote party each device tracks one person; the host keeps score for everyone.
-export const solo = () => state.mode === "solo" || state.mode === "party";
+// Online (a remote party or a matchmade 1v1), each device tracks one person and the
+// host keeps score for everyone.
+export const online = () => Boolean(state.party);
+export const solo = () => state.mode === "solo" || online();
 export const teamMode = () => state.mode === "coop" || state.mode === "party";
-export const isHost = () => state.mode === "party" && Boolean(state.party?.isHost);
-export const isGuest = () => state.mode === "party" && Boolean(state.party) && !state.party.isHost;
-export const playerCount = () => state.mode === "party" ? Math.max(1, state.roster.length) : state.mode === "coop" || state.mode === "duel" ? 2 : 1;
+export const isHost = () => online() && state.party.isHost;
+export const isGuest = () => online() && !state.party.isHost;
+export const playerCount = () => online() ? Math.max(1, state.roster.length) : state.mode === "coop" || state.mode === "duel" ? 2 : 1;
 export const boss = () => BOSSES[state.bossIndex];
 export const difficulty = () => DIFFICULTIES[state.difficulty];
 export const activeTrackers = () => state.trackers.slice(0, playerCount());
 // The players this device's camera tracks: one in a party, otherwise everyone.
-export const localTrackers = () => state.mode === "party" ? state.trackers.slice(0, 1) : activeTrackers();
+export const localTrackers = () => online() ? state.trackers.slice(0, 1) : activeTrackers();
 // What the monster calls each player: their party name, or the names from the setup screen.
 export function playerName(index) {
-  if (state.mode === "party") return state.roster[index]?.name || "Adventurer";
+  if (online()) return state.roster[index]?.name || "Adventurer";
   return (index === 0 ? settings.name : settings.name2) || (state.mode === "solo" ? "Hero" : `Player ${index + 1}`);
 }
 

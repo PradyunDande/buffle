@@ -3,8 +3,8 @@
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, PARRY_WINDOW, points, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
 import { broadcastState } from "./party.js";
-import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
-import { $, clearAlert, confetti, flashAndShake, floatText, fx, renderSprite, resetSpeech, setResults, show, showAlert, sound, updateHud, updateTip } from "./ui.js";
+import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
+import { $, clearAlert, confetti, flashAndShake, fx, renderSprite, resetSpeech, setResults, show, showAlert, sound, updateHud, updateTip } from "./ui.js";
 
 export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
@@ -23,15 +23,15 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   player.form = quality.toUpperCase();
   state.repEvents++;
   if (quality === "clean") state.cleanEvents++;
-  if (quality === "bad" && (state.mode !== "party" || index === state.myIndex)) flashAndShake("shake");
+  if (quality === "bad" && (!online() || index === state.myIndex)) flashAndShake("shake");
 
   if (state.mode === "duel") {
-    sound("hit");
+    fx("sound", "hit");
     // A run of clean reps raises that player's multiplier; any other rep resets it.
     player.streak = quality === "clean" ? player.streak + 1 : 0;
     const earned = points[quality] * (REP_VALUE[player.exercise] ?? 1) * streakMultiplier(player.streak);
     state.scores[index] = scoreText(state.scores[index] + earned);
-    floatText(index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
+    fx("floatText", index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
     updateHud();
     if (Math.abs(rope()) >= 1) finishRound();
     return;
@@ -100,7 +100,7 @@ function switchMove(index, now, move = pickMove(state.trackers[index].exercise))
   }
   fx("floatText", index, `${name}!`, "sync");
   // Guests announce their own switches when the next state update arrives.
-  if (duel ? index === 0 : state.mode !== "party" || index === state.myIndex) {
+  if (duel ? index === 0 : !online() || index === state.myIndex) {
     fx("sound", "warn");
     showAlert(solo() || duel ? `SWITCH TO ${name}!` : `P${index + 1}: SWITCH TO ${name}!`, "phase", t.readyAt - now);
   }
@@ -140,7 +140,7 @@ function bossAttack(now) {
 }
 
 export function resetRound() {
-  const duel = state.mode === "duel", party = state.mode === "party";
+  const duel = state.mode === "duel", party = online();
   // A party host keeps one tracker per player, in roster order; it is player 0.
   state.trackers = Array.from({ length: party ? playerCount() : 2 }, newTracker);
   state.combo = 0; state.bestCombo = 0;
@@ -166,7 +166,7 @@ export function resetRound() {
   state.lastFrameAt = 0;
   $("time-value").textContent = String(state.duration / 1000);
   const players = `${playerCount()} PLAYER${playerCount() === 1 ? "" : "S"}`;
-  $("mode-label").textContent = duel ? `1V1 SCUFFLE · ${difficulty().name.toUpperCase()}`
+  $("mode-label").textContent = duel ? `${party ? "ONLINE " : ""}1V1 SCUFFLE · ${difficulty().name.toUpperCase()}`
     : `${party ? "REMOTE PARTY · " : ""}${difficulty().name.toUpperCase()} · ${state.mode === "solo" ? "SOLO" : players}`;
   $("game-title").textContent = duel ? NAMES[state.trackers[0].exercise] : boss().name;
   $("lobby").hidden = true;
@@ -196,8 +196,9 @@ export function stopRound() {
   state.session++;
   clearInterval(state.tick);
   clearInterval(state.countdownTimer);
-  state.tick = state.countdownTimer = 0;
-  if (state.mode !== "party") stopMedia();
+  clearTimeout(state.lobbyTimer);
+  state.tick = state.countdownTimer = state.lobbyTimer = 0;
+  if (!online()) stopMedia();
   clearAlert();
   state.status = "idle";
 }
@@ -273,37 +274,40 @@ function finishRound(won = false) {
   const reps = number(state.trackers.reduce((sum, p) => sum + p.reps, 0));
   const clean = `${state.repEvents ? Math.round(state.cleanEvents / state.repEvents * 100) : 0}%`;
   stopRound();
+  let result;
   if (state.mode === "duel") {
     const [a, b] = state.scores;
     const knockout = Math.abs(rope()) >= 1;
-    setResults(a === b ? "It's a draw!" : `Player ${a > b ? 1 : 2} wins!`,
+    const [first, second] = [playerName(0), playerName(1)];
+    result = [a === b ? "It's a draw!" : `${a > b ? first : second} wins!`,
       knockout ? "Pulled clean across the line!" : "Time! The higher score takes the crown.",
-      a === b ? "DRAW" : `P${a > b ? 1 : 2} WINS`, a === b ? "silver" : "gold",
-      [["P1 SCORE", number(scoreText(a))], ["P2 SCORE", number(scoreText(b))], ["TOTAL REPS", reps], ["CLEAN REPS", clean]]);
+      a === b ? "DRAW" : knockout ? "KNOCKOUT" : "DECISION", a === b ? "silver" : "gold",
+      [[first.toUpperCase(), number(scoreText(a))], [second.toUpperCase(), number(scoreText(b))], ["TOTAL REPS", reps], ["CLEAN REPS", clean]]];
     won = a !== b;
   } else {
     const b = boss();
     const mvp = state.mode === "party" && state.roster.length > 1 ? partyMvp() : "";
-    const result = [won ? `${b.name} is defeated!` : `${b.name} wins this time`,
+    result = [won ? `${b.name} is defeated!` : `${b.name} wins this time`,
       (won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
       // Rank by hearts left: all three is S, then A, then B.
       won ? `${["B", "B", "A", "S"][state.hearts]} RANK` : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
       [["DAMAGE", `${number(scoreText(state.bossMax - state.bossHp))} / ${state.bossMax}`], ["TOTAL REPS", reps], ["CLEAN REPS", clean],
         teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["PARRIES", String(state.parries)]]];
-    setResults(...result);
-    if (isHost()) state.party.broadcast({ t: "results", result, won });
   }
+  setResults(...result);
+  if (isHost()) state.party.broadcast({ t: "results", result, won });
   setResultActions(won);
   show("results");
   if (won) { sound("victory"); confetti(); }
 }
 export function setResultActions(won) {
-  const party = state.mode === "party";
-  $("again-button").hidden = isGuest();
-  $("again-button").textContent = state.mode === "duel" ? "Rematch" : won ? "Scuffle Again" : "Try Again";
-  $("map-button").hidden = state.mode === "duel";
+  const party = online(), duel = state.mode === "duel";
+  // In an online 1v1 either player can ask for a rematch; in a party only the host starts.
+  $("again-button").hidden = isGuest() && !duel;
+  $("again-button").textContent = duel ? "Rematch" : won ? "Scuffle Again" : "Try Again";
+  $("map-button").hidden = duel;
   $("map-button").textContent = party ? "Party Lobby" : "Change Setup";
-  $("menu-button").textContent = party ? "Leave Party" : "Main Menu";
+  $("menu-button").textContent = !party ? "Main Menu" : duel ? "Leave Match" : "Leave Party";
 }
 function partyMvp() {
   let best = 0;

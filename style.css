@@ -206,6 +206,12 @@ h3 {
   box-shadow: none;
 }
 
+.button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .primary {
   background: var(--ui-accent);
   border-color: var(--ui-accent-light);
@@ -318,6 +324,16 @@ kbd {
   box-shadow: 8px 8px 0 var(--shadow-hard);
 }
 
+.match-status {
+  margin: 16px 0 0;
+  color: var(--ui-accent-light);
+  font-size: 22px;
+  letter-spacing: .1em;
+  text-align: center;
+  text-transform: uppercase;
+  animation: blink 1s steps(2) infinite;
+}
+
 .setup-label {
   margin: 28px 0 12px;
   color: var(--ui-accent);
@@ -426,12 +442,19 @@ kbd {
 }
 
 #start-fight,
-#start-duel {
+#start-duel,
+#find-match {
   display: block;
   width: 100%;
   margin-top: 32px;
   min-height: 72px;
   font-size: 30px;
+}
+
+#find-match {
+  margin-top: 16px;
+  min-height: 60px;
+  font-size: 24px;
 }
 
 .field {

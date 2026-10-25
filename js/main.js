@@ -3,8 +3,8 @@
 import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
 import { beginCountdown, recordRep, setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
 import { cleanCode } from "./network.js";
-import { copyInvite, enterLobby, hostStart, leaveParty, openParty } from "./party.js";
-import { saveSettings, settings, solo, state } from "./state.js";
+import { cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty } from "./party.js";
+import { isGuest, online, saveSettings, settings, solo, state } from "./state.js";
 import { $, show, toast } from "./ui.js";
 
 $("fight-button").addEventListener("click", showSetup);
@@ -29,11 +29,15 @@ function goToMenu() {
 }
 document.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => show(button.dataset.screen)));
 $("start-duel").addEventListener("click", () => { state.mode = "duel"; startGame(); });
+$("find-match").addEventListener("click", findMatch);
+// Leaving the 1v1 screen stops a search; the shared Back handler then shows the menu.
+document.querySelector("#exercise .back").addEventListener("click", cancelMatch);
 $("leave-button").addEventListener("click", goToMenu);
 $("menu-button").addEventListener("click", goToMenu);
 $("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showSetup(); });
 $("again-button").addEventListener("click", () => {
-  if (state.party) hostStart();
+  if (isGuest()) { state.party.send({ t: "rematch" }); toast("Rematch requested"); }
+  else if (state.party) hostStart();
   else if (state.mode === "duel") startGame();
   else startFight();
 });
@@ -48,15 +52,15 @@ const invite = cleanCode(new URLSearchParams(location.search).get("party"));
 if (invite.length === 5) { $("join-code").value = invite; show("remote"); }
 $("retry-button").addEventListener("click", () => {
   stopMedia();
-  if (state.mode !== "party") state.status = "loading";
+  if (!online()) state.status = "loading";
   $("game-error").hidden = true;
   $("camera-placeholder").hidden = false;
   $("camera-placeholder").textContent = "Preparing the camera…";
   prepareCamera();
 });
 function useHotkeys() {
-  if (state.mode === "party") {
-    // Party hotkeys always work; without a camera this just clears the error.
+  if (online()) {
+    // Online hotkeys always work; without a camera this just clears the error.
     if (!state.stream) {
       stopMedia(); state.keyboardOnly = true;
       $("camera-placeholder").hidden = false;

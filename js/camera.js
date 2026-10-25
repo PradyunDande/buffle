@@ -3,7 +3,7 @@
 import { BONES, MODEL_URL, VISION_URL } from "./config.js";
 import { joint, processJack, processPlank, processPunch, processPushup, processSquat } from "./exercises.js";
 import { beginCountdown } from "./game.js";
-import { resetMotion, settings, solo, state } from "./state.js";
+import { online, resetMotion, settings, solo, state } from "./state.js";
 import { $ } from "./ui.js";
 
 export function stopMedia() {
@@ -48,7 +48,7 @@ export async function prepareCamera() {
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera access requires localhost or HTTPS and a supported browser.");
     // Party cameras are also streamed to every player, so they use a lighter resolution.
-    const size = state.mode === "party" ? { width: { ideal: 640 }, height: { ideal: 480 } } : { width: { ideal: 1280 }, height: { ideal: 720 } };
+    const size = online() ? { width: { ideal: 640 }, height: { ideal: 480 } } : { width: { ideal: 1280 }, height: { ideal: 720 } };
     const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "user", ...size } });
     if (!current()) { stream.getTracks().forEach((track) => track.stop()); return; }
     state.stream = stream;
@@ -65,7 +65,7 @@ export async function prepareCamera() {
     state.lastVideoTime = -1;
     state.cameraBusy = false;
     ensurePoseLoop();
-    if (state.mode !== "party") beginCountdown(state.session);
+    if (!online()) beginCountdown(state.session);
   } catch (error) {
     if (!current()) return;
     const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
@@ -119,7 +119,7 @@ function assignPlayers(result, now) {
 export function positionLabels() {
   for (let i = 0; i < 2; i++) {
     const label = $(`p${i + 1}-label`);
-    label.hidden = state.mode === "party" || (i === 1 && solo());
+    label.hidden = online() || (i === 1 && solo());
     // A party host can have a single tracker.
     const p = state.trackers[i];
     if (label.hidden || !p) continue;

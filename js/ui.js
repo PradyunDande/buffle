@@ -2,7 +2,7 @@
 
 import { HEARTS, NAMES, TIPS } from "./config.js";
 import { tileFor, updateTileNames } from "./party.js";
-import { comboMultiplier, isFrenzy, isHost, localTrackers, number, rope, scoreText, settings, state } from "./state.js";
+import { comboMultiplier, isFrenzy, isHost, localTrackers, online, number, rope, scoreText, settings, state } from "./state.js";
 
 export const $ = (id) => document.getElementById(id);
 
@@ -108,7 +108,7 @@ export function flashAndShake(kind, id = "stage") {
   setTimeout(() => element.classList.remove(kind), 600);
 }
 export function floatText(index, text, className = "") {
-  const party = state.mode === "party";
+  const party = online();
   const own = !party || index === state.myIndex;
   const stage = own ? $("stage") : tileFor(index) || $("stage");
   const item = document.createElement("span");
@@ -163,7 +163,7 @@ export function updateHud() {
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
     $("boss-sprite").classList.toggle("winding", Boolean(state.attack));
   }
-  if (state.mode === "party") updateTileNames();
+  if (online()) updateTileNames();
   else {
     $("p1-reps").textContent = number(state.trackers[0].reps);
     $("p2-reps").textContent = number(state.trackers[1].reps);
@@ -175,7 +175,7 @@ export function updateHud() {
 function moveLabel() {
   const now = performance.now();
   const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${now < t.readyAt ? " · GET READY" : ""}`);
-  return moves.length === 1 ? `${state.mode === "party" ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
+  return moves.length === 1 ? `${online() ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
 }
 export function updateTip() {
   const moves = [...new Set(localTrackers().map((t) => t.exercise).filter(Boolean))];

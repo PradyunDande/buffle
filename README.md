@@ -6,7 +6,7 @@
 
 - **Boss Fight** (1–2 players, 1 camera): choose how many people are playing and a difficulty, and a random monster appears: the Big Bad Wolf, the Bridge Troll, the Wicked Witch, or the Tower Dragon (never the same one twice in a row). With two players, reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
 - **Remote Party** (up to 6 players, one device each): one player creates a party and shares its 5-letter code or invite link; the others join from their own devices. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP is multiplied by the number of players.
-- **1v1 Scuffle** (2 players, 1 camera): a 45-second tug-of-war. Pick a difficulty and the game calls random moves from that difficulty's list, always the same move for both players at the same moment; both pause together while switching. Clean-rep streaks multiply your points. A 25-point lead wins by knockout.
+- **1v1 Scuffle** (2 players, 1 camera): a 45-second tug-of-war. Pick a difficulty and the game calls random moves from that difficulty's list, always the same move for both players at the same moment; both pause together while switching. Clean-rep streaks multiply your points. A 25-point lead wins by knockout. **Find Online Match** pairs you with another player online, each on their own device and camera; online matches are always Hard.
 
 ## Boss fights
 
@@ -45,6 +45,7 @@ Remote play uses [PeerJS](https://peerjs.com/) (loaded from a CDN) to connect br
 - **Hosting:** each player must load the game over HTTPS (or `localhost`) for camera access, so a party across devices needs the folder hosted somewhere public, such as GitHub Pages, Netlify, or an HTTPS tunnel like ngrok to your local server.
 - **Networks:** without a TURN server, some strict corporate or school networks block the direct connection. Phone hotspots and home Wi-Fi usually work.
 - Players who join mid-fight wait in the lobby until the next fight. If the host leaves, the party ends.
+- **Matchmaking** has no server of its own. Six well-known PeerJS ids (`buffle-match-hard-0` to `-5`) act as waiting rooms: a searcher first tries to join whoever is waiting in one, and if nobody is, takes the first free room and waits. If two people search at the same instant and both end up waiting, the one in the later room keeps checking earlier rooms and moves when it finds someone. Whoever waited becomes the host. Six rooms means at most six players can be waiting at once; anyone beyond that is told to try again.
 
 ## Test controls
 

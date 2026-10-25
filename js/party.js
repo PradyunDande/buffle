@@ -4,7 +4,7 @@ import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./came
 import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
 import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
 import { cleanCode, createParty, MAX_PLAYERS } from "./network.js";
-import { difficulty, isGuest, isHost, newTracker, number, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
+import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
 
 // Remote party: the host runs the fight and streams state to guests. Each guest
@@ -47,6 +47,53 @@ export async function openParty(join) {
   } finally { setRemoteBusy(false); }
   if (state.party === party) enterLobby();
 }
+// Online 1v1 matchmaking is always on Hard. The search runs from the 1v1 screen;
+// once two players are linked they go straight to the match screen.
+function setMatchStatus(text) {
+  $("match-status").textContent = text || "";
+  $("match-status").hidden = !text;
+  $("find-match").textContent = text ? "Cancel Search" : "Find Online Match";
+  $("start-duel").disabled = Boolean(text);
+}
+export async function findMatch() {
+  if (state.searching) { cancelMatch(); return; }
+  if (state.party) return;
+  stopRound();
+  const party = newParty();
+  Object.assign(state, { mode: "duel", party, roster: [], difficulty: "hard", keyboardOnly: false, searching: true });
+  setMatchStatus("Searching for an opponent…");
+  try {
+    await party.matchmake(settings.name, () => { if (state.party === party) setMatchStatus("Waiting for an opponent…"); });
+  } catch (error) {
+    if (state.party !== party) return;
+    state.searching = false;
+    party.leave();
+    resetOnline("duel");
+    setMatchStatus("");
+    toast(error?.message || "Could not find a match.");
+    return;
+  }
+  if (state.party !== party) return;
+  state.searching = false;
+  setMatchStatus("");
+  toast(`Matched with ${state.roster.find((m) => m.id !== party.id)?.name || "an opponent"}`);
+  enterLobby();
+}
+export function cancelMatch() {
+  if (!state.searching) return;
+  state.searching = false;
+  const party = state.party;
+  resetOnline("duel");
+  party.leave();
+  setMatchStatus("");
+}
+// Back to local play: this player's own difficulty, no roster or remote cameras.
+function resetOnline(mode) {
+  Object.assign(state, { mode, party: null, roster: [], partyReps: [], keyboardOnly: false,
+    difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
+  state.remoteStreams.clear();
+  renderTiles();
+}
 export function leaveParty(message) {
   const party = state.party;
   state.party = null;
@@ -54,16 +101,17 @@ export function leaveParty(message) {
   stopRound();
   stopMedia();
   // The lobby's difficulty belonged to the party; go back to this player's own choice.
-  Object.assign(state, { mode: "solo", roster: [], partyReps: [], keyboardOnly: false,
-    difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
-  state.remoteStreams.clear();
-  renderTiles();
+  resetOnline("solo");
   $("players-bar").hidden = false;
   show("menu");
   if (message) toast(message);
 }
 
 function onRoster(members) {
+  if (state.mode === "duel" && state.roster.length > 1 && members.length < 2) {
+    leaveParty("Your opponent left the match.");
+    return;
+  }
   const before = state.roster;
   state.roster = members;
   state.myIndex = Math.max(0, members.findIndex((m) => m.id === state.party.id));
@@ -74,7 +122,8 @@ function onRoster(members) {
     state.trackers = members.map((m) => (old.has(m.id) && state.trackers[old.get(m.id)]) || newTracker());
     state.party.broadcast({ t: "difficulty", difficulty: state.difficulty });
   }
-  if (before.length) {
+  // A 1v1 announces the match itself, so only parties toast arrivals and departures.
+  if (before.length && state.mode !== "duel") {
     const had = new Set(before.map((m) => m.id)), has = new Set(members.map((m) => m.id));
     members.filter((m) => !had.has(m.id)).forEach((m) => toast(`${m.name} joined the party`));
     before.filter((m) => !has.has(m.id)).forEach((m) => toast(`${m.name} left the party`));
@@ -89,6 +138,8 @@ function onPartyMessage(from, message) {
     const index = state.roster.findIndex((m) => m.id === from);
     if (message.t === "rep" && index > 0 && Object.hasOwn(points, message.quality) && (message.amount === 1 || message.amount === .5)) {
       recordRep(index, message.quality, message.amount, false);
+    } else if (message.t === "rematch" && state.mode === "duel" && state.screen === "results") {
+      hostStart();
     }
     return;
   }
@@ -108,7 +159,7 @@ export function broadcastState(now) {
   state.party.broadcast({ t: "state", status: state.status, hp: state.bossHp, max: state.bossMax,
     hearts: state.hearts, attack: Boolean(state.attack), combo: state.combo,
     frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
-    reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise),
+    reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise), scores: state.scores,
     ready: state.trackers.map((t) => Math.max(0, Math.round(t.readyAt - now))) });
 }
 function applyMoves(moves) {
@@ -135,6 +186,7 @@ function applySnapshot(snapshot) {
   state.combo = Number(snapshot.combo) || 0;
   state.frenzyUntil = performance.now() + (Number(snapshot.frenzy) || 0);
   state.partyReps = Array.isArray(snapshot.reps) ? snapshot.reps.map((n) => Number(n) || 0) : [];
+  if (Array.isArray(snapshot.scores)) state.scores = [0, 1].map((i) => Number(snapshot.scores[i]) || 0);
   $("time-value").textContent = String(Number(snapshot.time) || 0);
   updateHud();
 }
@@ -153,10 +205,13 @@ function showPartyResults(message) {
 export function enterLobby() {
   stopRound();
   state.status = "lobby";
-  $("lobby").hidden = false;
+  const duel = state.mode === "duel";
+  $("lobby").hidden = duel;
   for (const id of ["timer", "arena", "duel-hud", "players-bar", "frenzy-banner", "countdown", "waiting"]) $(id).hidden = true;
-  $("mode-label").textContent = "REMOTE PARTY";
-  $("game-title").textContent = "Party Lobby";
+  $("mode-label").textContent = duel ? "ONLINE 1V1 SCUFFLE · HARD" : "REMOTE PARTY";
+  $("game-title").textContent = duel ? `VS ${state.roster.find((m) => m.id !== state.party.id)?.name || "Opponent"}` : "Party Lobby";
+  // A matched 1v1 has nothing to set up: the host starts it once cameras have had a moment.
+  if (duel && isHost()) state.lobbyTimer = setTimeout(hostStart, 5000);
   $("pose-tip").textContent = "Each player needs their own camera with their full body in view.";
   show("game");
   renderTiles();
@@ -203,7 +258,7 @@ function startPartyFight(bossIndex, moves) {
   beginCountdown(state.session);
 }
 export function hostStart() {
-  if (!isHost()) return;
+  if (!isHost() || state.status === "playing" || state.status === "countdown") return;
   startPartyFight(randomBoss());
   state.party.broadcast({ t: "start", bossIndex: state.bossIndex, difficulty: state.difficulty, moves: state.trackers.map((t) => t.exercise) });
 }
@@ -220,7 +275,7 @@ export function tileFor(index) {
 }
 function renderTiles() {
   const grid = $("stage-grid");
-  const others = state.mode === "party" ? state.roster.filter((m) => m.id !== state.party?.id) : [];
+  const others = online() ? state.roster.filter((m) => m.id !== state.party?.id) : [];
   grid.classList.toggle("multi", others.length > 0);
   grid.classList.toggle("many", others.length >= 3);
   const keep = new Set(others.map((m) => m.id));
@@ -245,7 +300,7 @@ function renderTiles() {
   updateTileNames();
 }
 export function updateTileNames() {
-  const party = state.mode === "party";
+  const party = online();
   $("local-name").hidden = !party;
   if (!party) return;
   const fighting = state.status !== "lobby";
