@@ -62,7 +62,7 @@ export function confetti() {
     bit.className = "confetti";
     bit.style.left = `${40 + Math.random() * 20}vw`;
     bit.style.top = `${18 + Math.random() * 12}vh`;
-    bit.style.background = ["#f3c351", "#d4563b", "#fff1c4", "#9462a6"][i % 4];
+    bit.style.background = `var(${["--ui-accent", "--ui-danger", "--text-main", "--ui-alt"][i % 4]})`;
     bit.style.setProperty("--dx", `${(Math.random() - .5) * 450}px`);
     bit.style.setProperty("--dy", `${100 + Math.random() * 280}px`);
     layer.append(bit);
@@ -70,9 +70,34 @@ export function confetti() {
   }
   const bat = document.createElement("span");
   bat.className = "bat";
-  bat.textContent = "🦇";
+  bat.append(pixelArt(BAT));
   layer.append(bat);
   setTimeout(() => bat.remove(), 1400);
+}
+// Pixel-art icons drawn as crisp SVG in the current text color: "X" cells are filled.
+const HEART = [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."];
+const BAT = ["X.........X", "XX..X.X..XX", "XXX.XXX.XXX", "XXXXXXXXXXX", ".XXXXXXXXX.", "..XX...XX..", "...X...X..."];
+function pixelArt(rows, className = "") {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${rows[0].length} ${rows.length}`);
+  svg.setAttribute("shape-rendering", "crispEdges");
+  svg.setAttribute("aria-hidden", "true");
+  if (className) svg.setAttribute("class", className);
+  rows.forEach((row, y) => [...row].forEach((cell, x) => {
+    if (cell !== "X") return;
+    const rect = document.createElementNS(ns, "rect");
+    for (const [key, value] of [["x", x], ["y", y], ["width", 1], ["height", 1], ["fill", "currentColor"]]) rect.setAttribute(key, value);
+    svg.append(rect);
+  }));
+  return svg;
+}
+function renderHearts(count) {
+  const box = $("hearts");
+  if (box.dataset.count === String(count)) return;
+  box.dataset.count = String(count);
+  box.setAttribute("aria-label", `${count} heart${count === 1 ? "" : "s"}`);
+  box.replaceChildren(...Array.from({ length: HEARTS }, (_, i) => pixelArt(HEART, i < count ? "" : "empty")));
 }
 export function flashAndShake(kind, id = "stage") {
   const element = $(id);
@@ -132,7 +157,7 @@ export function updateHud() {
     $("boss-hp-fill").style.width = `${state.bossHp / state.bossMax * 100}%`;
     $("boss-hp-label").textContent = `${Math.ceil(state.bossHp)} / ${state.bossMax} HP`;
     $("move-label").textContent = moveLabel();
-    $("hearts").textContent = "♥".repeat(state.hearts) + "♡".repeat(HEARTS - state.hearts);
+    renderHearts(state.hearts);
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
     $("boss-sprite").classList.toggle("winding", Boolean(state.attack));
   }

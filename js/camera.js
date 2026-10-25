@@ -137,7 +137,8 @@ function drawSkeleton(assigned) {
   assigned.forEach((entry, index) => {
     if (!entry) return;
     const landmarks = entry.landmarks;
-    ctx.strokeStyle = index ? "#f07558" : "#f7cc66";
+    // Skeletons use the theme's player colors.
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue(index ? "--ui-alt" : "--ui-accent").trim();
     ctx.fillStyle = ctx.strokeStyle;
     ctx.lineWidth = Math.max(3, canvas.width / 280);
     ctx.lineCap = "round";

@@ -2,7 +2,7 @@
 
 import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
-import { beginCountdown, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
+import { beginCountdown, difficultyPips, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
 import { cleanCode, createParty, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
@@ -176,13 +176,13 @@ function renderLobby() {
   const host = state.party.isHost, count = playerCount(), level = difficulty();
   $("party-code").textContent = state.party.code;
   $("lobby-status").textContent = `${count} of ${MAX_PLAYERS} players`;
-  $("lobby-hp").textContent = `${level.name}: ${level.hp} HP × ${count} = ${level.hp * count} HP · random monster`;
-  $("boss-picker").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, item]) => {
+  $("lobby-hp").textContent = `${level.hp * count} HP`;
+  $("boss-picker").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, item], i) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `pick${key === state.difficulty ? " selected" : ""}`;
     button.disabled = !host;
-    button.innerHTML = `<span><strong>${item.name}</strong><br>${item.blurb}</span>`;
+    button.innerHTML = `<span>${item.name}</span>${difficultyPips(i + 1)}`;
     button.addEventListener("click", () => {
       state.difficulty = key;
       state.party.broadcast({ t: "difficulty", difficulty: key });
@@ -255,7 +255,7 @@ export function updateTileNames() {
     if (!label) return;
     const reps = isHost() ? state.trackers[i]?.reps ?? 0 : state.partyReps[i] ?? 0;
     const move = isHost() ? state.trackers[i]?.exercise : i === state.myIndex ? state.trackers[0].exercise : state.partyMoves[i];
-    label.textContent = `${i === 0 ? "♛ " : ""}${member.name}${i === state.myIndex ? " (you)" : ""}`
+    label.textContent = `${member.name}${i === state.myIndex ? " (you)" : i === 0 ? " (host)" : ""}`
       + (fighting ? `${move ? ` · ${NAMES[move]}` : ""} · ${number(reps)} reps` : "");
   });
 }

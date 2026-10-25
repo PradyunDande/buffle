@@ -58,6 +58,8 @@ Each boss in `BOSSES` ([js/config.js](js/config.js)) has a 16×16 pixel map draw
 
 The game is plain ES modules with no build step; `index.html` loads `js/main.js`, which imports the rest.
 
+`style.css` is themed entirely through role-based variables in `:root` (`--bg-base`, `--bg-surface`, `--ui-accent`, `--ui-danger`, `--text-main`, and so on). No rule outside `:root` names a color, and the skeleton overlay and confetti read the same variables, so changing those values re-themes the whole game.
+
 | File | What it holds |
 | --- | --- |
 | `js/main.js` | Entry point: button, keyboard, and settings wiring |

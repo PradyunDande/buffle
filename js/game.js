@@ -160,7 +160,7 @@ export function resetRound() {
   $("duel-hud").hidden = !duel;
   $("combo-box").hidden = !teamMode();
   $("players-bar").hidden = party;
-  $("shared-mark").textContent = duel ? "✦ VERSUS ✦" : "✦ TEAM UP ✦";
+  $("shared-mark").textContent = duel ? "Versus" : "Team";
   $("p2-score").hidden = solo();
   $("p2-label").hidden = solo();
   updateTip();
@@ -267,11 +267,11 @@ function finishRound(won = false) {
   } else {
     const b = boss();
     const mvp = state.mode === "party" && state.roster.length > 1 ? partyMvp() : "";
-    const stars = Math.max(1, state.hearts);
     $("results-eyebrow").textContent = "THE BATTLE IS OVER";
     const result = [won ? `${b.name} is defeated!` : `${b.name} wins this time`,
       (won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
-      won ? "★".repeat(stars) + "☆".repeat(HEARTS - stars) : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
+      // Rank by hearts left: all three is S, then A, then B.
+      won ? `${["B", "B", "A", "S"][state.hearts]} RANK` : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
       [["DAMAGE", `${number(scoreText(state.bossMax - state.bossHp))} / ${state.bossMax}`], ["TOTAL REPS", reps], ["CLEAN REPS", clean],
         teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["PARRIES", String(state.parries)]]];
     setResults(...result);
@@ -315,17 +315,18 @@ export function showSetup() {
   $("p1-name").value = settings.name;
   $("p2-name").value = settings.name2;
   $("p2-name-field").hidden = players === 1;
-  $("difficulty-choice").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, level]) => {
+  $("difficulty-choice").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, level], i) => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = `choice difficulty${key === state.difficulty ? " selected" : ""}`;
-    card.innerHTML = `<strong>${level.name}</strong><span>${level.blurb}</span>`
-      + `<small>${level.hp} HP per player · ${level.time}s</small>`
-      + `<span class="chips">${level.moves.map((move) => `<em>${NAMES[move]}</em>`).join("")}</span>`;
+    card.innerHTML = `<strong>${level.name}</strong>${difficultyPips(i + 1)}<small>${level.hp} HP × player</small>`;
     card.addEventListener("click", () => { state.difficulty = settings.difficulty = key; saveSettings(); showSetup(); });
     return card;
   }));
   if (state.screen !== "setup") show("setup");
+}
+export function difficultyPips(level) {
+  return `<span class="pips" data-level="${level}" aria-hidden="true"><i></i><i></i><i></i></span>`;
 }
 export function setPlayers(count) {
   settings.players = count;
