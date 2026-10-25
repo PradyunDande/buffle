@@ -5,6 +5,7 @@ import { joint, processJack, processPlank, processPunch, processPushup, processS
 import { beginCountdown } from "./game.js";
 import { online, resetMotion, settings, solo, state } from "./state.js";
 import { $ } from "./ui.js";
+import { publishStream } from "./voice.js";
 
 export function stopMedia() {
   state.cameraToken++;
@@ -13,7 +14,7 @@ export function stopMedia() {
   state.raf = 0;
   if (state.stream) state.stream.getTracks().forEach((track) => track.stop());
   state.stream = null;
-  state.party?.setStream(null);
+  publishStream();
   $("camera").srcObject = null;
   $("skeleton").getContext("2d").clearRect(0, 0, $("skeleton").width, $("skeleton").height);
 }
@@ -52,7 +53,7 @@ export async function prepareCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: "user", ...size } });
     if (!current()) { stream.getTracks().forEach((track) => track.stop()); return; }
     state.stream = stream;
-    state.party?.setStream(stream);
+    publishStream();
     const video = $("camera");
     video.srcObject = stream;
     await video.play();

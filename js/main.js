@@ -6,8 +6,22 @@ import { cleanCode } from "./network.js";
 import { cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty } from "./party.js";
 import { isGuest, online, saveSettings, settings, solo, state } from "./state.js";
 import { $, show, toast } from "./ui.js";
+import { toggleMic } from "./voice.js";
 
-$("fight-button").addEventListener("click", showSetup);
+// Each mode first asks whether to play locally or online.
+let chosenMode = "boss";
+function showWhere(mode) {
+  chosenMode = mode;
+  $("where-title").textContent = mode === "boss" ? "Boss Scuffle" : "1v1 Scuffle";
+  show("where");
+}
+$("fight-button").addEventListener("click", () => showWhere("boss"));
+$("duel-button").addEventListener("click", () => showWhere("duel"));
+$("play-local").addEventListener("click", () => { if (chosenMode === "boss") showSetup(); else showDuelSetup(); });
+$("play-online").addEventListener("click", () => {
+  $("player-name").value = $("match-name").value = settings.name;
+  show(chosenMode === "boss" ? "remote" : "duel-online");
+});
 document.querySelectorAll("[data-players]").forEach((button) => button.addEventListener("click", () => setPlayers(Number(button.dataset.players))));
 // Player 1's name is also their remote party name.
 for (const [id, key] of [["p1-name", "name"], ["p2-name", "name2"]]) {
@@ -18,10 +32,8 @@ for (const [id, key] of [["p1-name", "name"], ["p2-name", "name2"]]) {
   });
 }
 $("start-fight").addEventListener("click", () => { state.mode = settings.players === 2 ? "coop" : "solo"; startFight(); });
-$("duel-button").addEventListener("click", showDuelSetup);
 $("how-button").addEventListener("click", () => show("how"));
 $("settings-button").addEventListener("click", () => show("settings"));
-$("remote-button").addEventListener("click", () => { $("player-name").value = settings.name; show("remote"); });
 function goToMenu() {
   if (state.party) { leaveParty(); return; }
   if (state.screen === "game") stopRound();
@@ -31,8 +43,9 @@ document.querySelectorAll("[data-screen]").forEach((button) => button.addEventLi
 $("start-duel").addEventListener("click", () => { state.mode = "duel"; startGame(); });
 $("find-match").addEventListener("click", findMatch);
 // Leaving the 1v1 screen stops a search; the shared Back handler then shows the menu.
-document.querySelector("#exercise .back").addEventListener("click", cancelMatch);
+document.querySelector("#duel-online .back").addEventListener("click", cancelMatch);
 $("leave-button").addEventListener("click", goToMenu);
+$("mic-button").addEventListener("click", toggleMic);
 $("menu-button").addEventListener("click", goToMenu);
 $("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showSetup(); });
 $("again-button").addEventListener("click", () => {

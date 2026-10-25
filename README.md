@@ -4,8 +4,10 @@
 
 ## Modes
 
-- **Boss Fight** (1–2 players, 1 camera): choose how many people are playing and a difficulty, and a random monster appears: the Big Bad Wolf, the Bridge Troll, the Wicked Witch, or the Tower Dragon (never the same one twice in a row). With two players, reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
-- **Remote Party** (up to 6 players, one device each): one player creates a party and shares its 5-letter code or invite link; the others join from their own devices. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP is multiplied by the number of players.
+The menu has two modes, **Boss Scuffle** and **1v1 Scuffle**. Each first asks whether you're playing **Local** (sharing one camera) or **Online** (each on your own device).
+
+- **Local Boss Scuffle** (1–2 players, 1 camera): choose how many people are playing and a difficulty, and a random monster appears: the Big Bad Wolf, the Bridge Troll, the Wicked Witch, or the Tower Dragon (never the same one twice in a row). With two players, reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
+- **Online Boss Scuffle** (up to 6 players, one device each): one player creates a party and shares its 5-letter code or invite link; the others join from their own devices. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP is multiplied by the number of players.
 - **1v1 Scuffle** (2 players, 1 camera): a 45-second tug-of-war. Pick a difficulty and the game calls random moves from that difficulty's list, always the same move for both players at the same moment; both pause together while switching. Clean-rep streaks multiply your points. A 25-point lead wins by knockout. **Find Online Match** pairs you with another player online, each on their own device and camera; online matches are always Hard.
 
 ## Boss fights
@@ -41,7 +43,7 @@ The first fight loads MediaPipe Tasks Vision and its lite pose model from the sp
 Remote play uses [PeerJS](https://peerjs.com/) (loaded from a CDN) to connect browsers directly over WebRTC. PeerJS's free public server only introduces players to each other; video and game events go player to player.
 
 - **Host-authoritative:** the host's browser runs the fight (boss HP, each player's move, attacks, timer) and sends the state to guests 10 times a second. Each guest runs pose detection on their own camera and sends only their reps.
-- **Video:** every player sends their camera to every other player at 640×480, with no audio. That's fine for a few players; at 6 players each device uploads 5 streams.
+- **Video and voice:** every player sends their camera (640×480) and microphone to every other player. The mic is requested separately from the camera, so a player can be heard without a camera or seen without a mic. **Mute** in the game header silences your own mic; each other player's camera tile has a Mute button and a volume slider that only affect what you hear. Echo cancellation and noise suppression are on. That's fine for a few players; at 6 players each device uploads 5 streams.
 - **Hosting:** each player must load the game over HTTPS (or `localhost`) for camera access, so a party across devices needs the folder hosted somewhere public, such as GitHub Pages, Netlify, or an HTTPS tunnel like ngrok to your local server.
 - **Networks:** without a TURN server, some strict corporate or school networks block the direct connection. Phone hotspots and home Wi-Fi usually work.
 - Players who join mid-fight wait in the lobby until the next fight. If the host leaves, the party ends.
@@ -71,7 +73,8 @@ The game is plain ES modules with no build step; `index.html` loads `js/main.js`
 | `js/exercises.js` | Rep detection for squats, jumping jacks, push-ups, and planks |
 | `js/camera.js` | Camera, pose model, and the per-frame tracking loop |
 | `js/party.js` | Remote party gameplay: lobby, roster, host-to-guest sync, camera grid |
-| `js/network.js` | PeerJS connections for remote parties |
+| `js/network.js` | PeerJS connections, parties, and matchmaking |
+| `js/voice.js` | Voice chat: microphone, self mute, and per-player volume |
 
 ## Known limitations
 

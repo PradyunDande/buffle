@@ -302,14 +302,32 @@ kbd {
 }
 
 .menu-grid .button {
-  min-height: 64px;
+  min-height: 96px;
+  font-size: 28px;
+  white-space: nowrap;
 }
 
-.menu-grid .wide {
-  grid-column: 1 / -1;
-  min-height: 80px;
-  font-size: 32px;
+.menu-links {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-top: 28px;
 }
+
+.text-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 22px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.text-link:hover {
+  color: var(--ui-accent-light);
+}
+
 
 /* ==========================================================================
    Panels and forms
@@ -965,6 +983,54 @@ kbd {
   border-color: var(--ui-accent);
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+#mic-button.muted {
+  border-color: var(--ui-danger);
+  color: var(--ui-alt);
+}
+
+/* Each other player's audio controls sit in the top corner of their camera tile. */
+.tile-audio {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 2px solid var(--shadow-hard);
+  background: var(--bg-inset);
+  box-shadow: 3px 3px 0 var(--shadow-hard);
+}
+
+.tile-mute {
+  min-width: 72px;
+  padding: 0 6px;
+  border: 2px solid var(--ui-border);
+  background: var(--bg-surface);
+  font-size: 18px;
+  text-transform: uppercase;
+}
+
+.tile-mute:hover {
+  border-color: var(--ui-accent);
+}
+
+.silenced .tile-mute {
+  border-color: var(--ui-danger);
+  color: var(--ui-alt);
+}
+
+.tile-volume {
+  width: 90px;
+  accent-color: var(--ui-accent);
+}
+
 .tile-name {
   left: 8px;
   bottom: 8px;
@@ -1415,6 +1481,7 @@ kbd {
   }
 
   .menu-grid {
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
@@ -1423,9 +1490,6 @@ kbd {
     font-size: 20px;
   }
 
-  .menu-grid .wide {
-    font-size: 28px;
-  }
 
   .panel {
     margin: 24px auto 48px;
@@ -1513,6 +1577,22 @@ kbd {
 
   .stage-grid.many {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tile-audio {
+    top: 4px;
+    right: 4px;
+    gap: 4px;
+    padding: 2px 4px;
+  }
+
+  .tile-mute {
+    min-width: 0;
+    font-size: 15px;
+  }
+
+  .tile-volume {
+    width: 56px;
   }
 
   .lobby {

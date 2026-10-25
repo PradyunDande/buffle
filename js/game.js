@@ -167,7 +167,7 @@ export function resetRound() {
   $("time-value").textContent = String(state.duration / 1000);
   const players = `${playerCount()} PLAYER${playerCount() === 1 ? "" : "S"}`;
   $("mode-label").textContent = duel ? `${party ? "ONLINE " : ""}1V1 SCUFFLE · ${difficulty().name.toUpperCase()}`
-    : `${party ? "REMOTE PARTY · " : ""}${difficulty().name.toUpperCase()} · ${state.mode === "solo" ? "SOLO" : players}`;
+    : `${party ? "ONLINE · " : ""}${difficulty().name.toUpperCase()} · ${state.mode === "solo" ? "SOLO" : players}`;
   $("game-title").textContent = duel ? NAMES[state.trackers[0].exercise] : boss().name;
   $("lobby").hidden = true;
   $("timer").hidden = false;

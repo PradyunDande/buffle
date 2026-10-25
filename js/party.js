@@ -5,6 +5,7 @@ import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
 import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
 import { cleanCode, createParty, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
+import { addAudioControls, applyAudio, playWithSound, startVoice, stopVoice, updateMicButton } from "./voice.js";
 import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
 
 // Remote party: the host runs the fight and streams state to guests. Each guest
@@ -53,11 +54,13 @@ function setMatchStatus(text) {
   $("match-status").textContent = text || "";
   $("match-status").hidden = !text;
   $("find-match").textContent = text ? "Cancel Search" : "Find Online Match";
-  $("start-duel").disabled = Boolean(text);
+  $("match-name").disabled = Boolean(text);
 }
 export async function findMatch() {
   if (state.searching) { cancelMatch(); return; }
   if (state.party) return;
+  settings.name = $("match-name").value.trim().slice(0, 16);
+  saveSettings();
   stopRound();
   const party = newParty();
   Object.assign(state, { mode: "duel", party, roster: [], difficulty: "hard", keyboardOnly: false, searching: true });
@@ -92,6 +95,8 @@ function resetOnline(mode) {
   Object.assign(state, { mode, party: null, roster: [], partyReps: [], keyboardOnly: false,
     difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
   state.remoteStreams.clear();
+  // After `party` is cleared, so the mic button sees play is no longer online.
+  stopVoice();
   renderTiles();
 }
 export function leaveParty(message) {
@@ -208,7 +213,7 @@ export function enterLobby() {
   const duel = state.mode === "duel";
   $("lobby").hidden = duel;
   for (const id of ["timer", "arena", "duel-hud", "players-bar", "frenzy-banner", "countdown", "waiting"]) $(id).hidden = true;
-  $("mode-label").textContent = duel ? "ONLINE 1V1 SCUFFLE · HARD" : "REMOTE PARTY";
+  $("mode-label").textContent = duel ? "ONLINE 1V1 SCUFFLE · HARD" : "ONLINE BOSS SCUFFLE";
   $("game-title").textContent = duel ? `VS ${state.roster.find((m) => m.id !== state.party.id)?.name || "Opponent"}` : "Party Lobby";
   // A matched 1v1 has nothing to set up: the host starts it once cameras have had a moment.
   if (duel && isHost()) state.lobbyTimer = setTimeout(hostStart, 5000);
@@ -217,6 +222,8 @@ export function enterLobby() {
   renderTiles();
   renderLobby();
   positionLabels();
+  startVoice();
+  updateMicButton();
   if (state.stream) ensurePoseLoop();
   else if (!state.keyboardOnly && !state.cameraBusy && $("game-error").hidden) {
     $("camera-placeholder").hidden = false;
@@ -286,16 +293,21 @@ function renderTiles() {
       tile = document.createElement("div");
       tile.className = "stage remote";
       tile.dataset.peer = member.id;
-      tile.innerHTML = `<video autoplay muted playsinline></video><div class="camera-placeholder">Connecting camera…</div><div class="tile-name"></div>`;
+      tile.innerHTML = `<video autoplay playsinline></video><div class="camera-placeholder">Connecting camera…</div><div class="tile-name"></div>`;
+      addAudioControls(tile, member.id);
       grid.append(tile);
     }
     const stream = state.remoteStreams.get(member.id) || null;
     const video = tile.querySelector("video");
     if (video.srcObject !== stream) {
       video.srcObject = stream;
-      if (stream) video.play().catch(() => { /* Autoplay resumes on the next user gesture. */ });
+      if (stream) playWithSound(video, tile, member.id);
     }
-    tile.querySelector(".camera-placeholder").hidden = Boolean(stream);
+    // A player without a camera can still be heard.
+    const placeholder = tile.querySelector(".camera-placeholder");
+    placeholder.hidden = Boolean(stream?.getVideoTracks().length);
+    placeholder.textContent = stream ? "Camera off" : "Connecting camera…";
+    applyAudio(tile, member.id);
   }
   updateTileNames();
 }

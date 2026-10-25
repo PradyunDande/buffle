@@ -14,7 +14,8 @@ export const state = {
   lastEvents: [null, null], endAt: 0, duration: 0, lastTickAt: 0,
   bossHp: 0, bossMax: 0, hearts: HEARTS, attack: null, nextAttackAt: 0, parries: 0,
   scores: [0, 0], cameraToken: 0, cameraBusy: false,
-  party: null, searching: false, roster: [], myIndex: 0, partyReps: [], partyMoves: [], remoteStreams: new Map(),
+  party: null, searching: false, roster: [], myIndex: 0,
+  mic: null, micBusy: false, micMuted: false, micError: false, remoteAudio: new Map(), partyReps: [], partyMoves: [], remoteStreams: new Map(),
   audio: null, toastTimer: 0
 };
 // Online (a remote party or a matchmade 1v1), each device tracks one person and the
