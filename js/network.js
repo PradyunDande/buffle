@@ -8,7 +8,12 @@
    waits there itself.
 
    Public parties work the same way: each takes one of a few well-known ids, and
-   browsing asks every one of those ids what party, if any, is behind it. */
+   browsing asks every one of those ids what party, if any, is behind it.
+
+   A WebRTC link that stalls rather than fails stays "open" in PeerJS, so messages
+   vanish without an error. The host pings every guest; a guest silent too long is
+   dropped, and a guest that stops hearing from the host leaves. Camera calls that
+   don't connect are placed again. */
 const PEERJS_URL = "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js";
 const PREFIX = "buffle-party-";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -17,6 +22,18 @@ const MATCH_PREFIX = "buffle-match-hard-";
 const MATCH_SLOTS = 6;
 const PUBLIC_PREFIX = "buffle-public-";
 const PUBLIC_SLOTS = 12;
+// STUN servers let most players connect directly; PeerJS's own TURN relays (its
+// defaults, kept here) carry the rest. Passing a config replaces the defaults.
+const PEER_OPTIONS = { config: { iceServers: [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: ["turn:eu-0.turn.peerjs.com:3478", "turn:us-0.turn.peerjs.com:3478"], username: "peerjs", credential: "peerjsp" }
+] } };
+const PING_EVERY = 2000;
+// How long a link may stay silent before it counts as lost.
+const SILENCE_LIMIT = 12000;
+// How long a camera call may take to connect before it's placed again.
+const CALL_RETRY = 10000;
 const JOIN_ERRORS = {
   missing: "No party found with that code.",
   full: "That party is full.",
@@ -46,7 +63,7 @@ export function cleanPartyName(name) {
 export async function listPublicParties() {
   await loadPeerJs();
   const probe = await new Promise((resolve, reject) => {
-    const candidate = new Peer();
+    const candidate = new Peer(PEER_OPTIONS);
     candidate.on("open", () => resolve(candidate));
     candidate.on("error", (error) => { if (!candidate.open) reject(error); });
   });
@@ -106,6 +123,7 @@ export function createParty(handlers) {
   const links = new Map();     // Host: guest id → data connection. Guest: host id → data connection.
   const outgoing = new Map();  // Video calls carrying this player's camera, by peer id.
   const incoming = new Map();  // Video calls carrying another player's camera, by peer id.
+  const heard = new Map();     // When each linked player was last heard from.
   let peer = null, stream = null, closed = false, pendingJoin = null;
   let matchWaiter = null, recheckTimer = 0, probing = false;
 
@@ -113,7 +131,7 @@ export function createParty(handlers) {
   // opens throwaway peers to look around without giving up its waiting room.
   function open(id, adopt = true) {
     return new Promise((resolve, reject) => {
-      const candidate = new Peer(id);
+      const candidate = new Peer(id, PEER_OPTIONS);
       let opened = false;
       candidate.on("open", (assigned) => {
         opened = true;
@@ -151,6 +169,8 @@ export function createParty(handlers) {
       const link = via.connect(hostId, { reliable: true });
       link.on("open", () => link.send({ t: "hello", name: cleanName(name) }));
       link.on("data", (message) => {
+        heard.set(hostId, Date.now());
+        if (message?.t === "ping") { link.send({ t: "pong" }); return; }
         if (message?.t === "full") { finish(new JoinError("full")); return; }
         if (message?.t === "roster") {
           if (!accepted) {
@@ -192,6 +212,7 @@ export function createParty(handlers) {
       if (member.id === party.id || outgoing.has(member.id)) continue;
       const call = peer.call(member.id, stream);
       if (!call) continue;
+      call.connectedAt = Date.now();
       outgoing.set(member.id, call);
       const forget = () => { if (outgoing.get(member.id) === call) outgoing.delete(member.id); };
       call.on("close", forget);
@@ -230,22 +251,50 @@ export function createParty(handlers) {
           return;
         }
         links.set(link.peer, link);
+        heard.set(link.peer, Date.now());
         setMembers([...party.members, { id: link.peer, name: cleanName(message.name) }]);
         sendRoster();
         if (party.members.length >= party.maxPlayers) matchWaiter?.resolve();
         return;
       }
-      if (links.get(link.peer) === link) handlers.onMessage(link.peer, message);
-    });
-    const leave = () => {
       if (links.get(link.peer) !== link) return;
-      links.delete(link.peer);
-      setMembers(party.members.filter((m) => m.id !== link.peer));
-      sendRoster();
-    };
+      heard.set(link.peer, Date.now());
+      if (message?.t !== "pong") handlers.onMessage(link.peer, message);
+    });
+    const leave = () => { if (links.get(link.peer) === link) dropGuest(link.peer); };
     link.on("close", leave);
     link.on("error", leave);
   }
+  function dropGuest(id) {
+    const link = links.get(id);
+    links.delete(id);
+    heard.delete(id);
+    link?.close();
+    setMembers(party.members.filter((m) => m.id !== id));
+    sendRoster();
+  }
+
+  // Every PING_EVERY: the host pings its guests and drops any that went silent; a
+  // guest leaves if the host went silent. Camera calls still not connected after
+  // CALL_RETRY are hung up and placed again.
+  function heartbeat() {
+    if (closed) return;
+    const now = Date.now();
+    for (const [id, link] of [...links]) {
+      if (now - (heard.get(id) ?? now) > SILENCE_LIMIT) {
+        if (party.isHost) dropGuest(id);
+        else handlers.onClose("Lost connection to the host.");
+        if (closed) return;
+      } else if (party.isHost && link.open) link.send({ t: "ping" });
+    }
+    for (const [id, call] of [...outgoing]) {
+      const ice = call.peerConnection?.iceConnectionState;
+      if (ice === "connected" || ice === "completed") { call.connectedAt = now; continue; }
+      if (now - call.connectedAt > CALL_RETRY) { outgoing.delete(id); call.close(); }
+    }
+    callMembers();
+  }
+  const heartbeatTimer = setInterval(heartbeat, PING_EVERY);
 
   party.create = async (name) => {
     await loadPeerJs();
@@ -355,6 +404,7 @@ export function createParty(handlers) {
     closed = true;
     pendingJoin = null;
     clearTimeout(recheckTimer);
+    clearInterval(heartbeatTimer);
     matchWaiter?.reject(new Error("Search cancelled."));
     for (const call of [...outgoing.values(), ...incoming.values()]) call.close();
     for (const link of links.values()) link.close();

@@ -217,13 +217,20 @@ function onPartyMessage(from, message) {
     startPartyFight(message.bossIndex, message.moves);
   }
   else if (message.t === "state" && inFight) applySnapshot(message);
+  // A guest that missed "start" (a stalled link, or joining mid-fight) jumps in on
+  // the next update instead of waiting in the lobby.
+  else if (message.t === "state" && message.status === "playing" && validBoss(message.bossIndex) && validDifficulty(message.difficulty)) {
+    state.difficulty = message.difficulty;
+    startPartyFight(message.bossIndex, message.moves);
+  }
   else if (message.t === "fx" && inFight && Object.hasOwn(EFFECTS, message.name) && Array.isArray(message.args)) EFFECTS[message.name](...message.args);
   else if (message.t === "results" && inFight) showPartyResults(message);
   else if (message.t === "lobby") enterLobby();
 }
 // Each player's move and how long until they're ready travel with every update.
 export function broadcastState(now) {
-  state.party.broadcast({ t: "state", status: state.status, hp: state.bossHp, max: state.bossMax,
+  state.party.broadcast({ t: "state", status: state.status, bossIndex: state.bossIndex, difficulty: state.difficulty,
+    hp: state.bossHp, max: state.bossMax,
     hearts: state.hearts, combo: state.combo,
     frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
     reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise), scores: state.scores,
