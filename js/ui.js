@@ -162,7 +162,6 @@ export function updateHud() {
     $("boss-hp-fill").style.width = `${state.bossHp / state.bossMax * 100}%`;
     $("boss-hp-label").textContent = `${Math.ceil(state.bossHp)} / ${state.bossMax} HP`;
     $("move-label").textContent = moveLabel();
-    updatePoseCall();
     renderHearts(state.hearts);
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
   }
@@ -172,6 +171,7 @@ export function updateHud() {
     $("p2-reps").textContent = number(state.trackers[1].reps);
   }
   $("frenzy-banner").hidden = duel || !isFrenzy();
+  renderCallout();
 }
 
 // The HUD names each local player's move, and "GET READY" while they switch.
@@ -180,17 +180,48 @@ function moveLabel() {
   const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${t.pose ? " · FROZEN" : now < t.readyAt ? " · GET READY" : ""}`);
   return moves.length === 1 ? `${online() ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
 }
-// The Strike a Pose prompt sits on this device's camera: the pose, how to do it,
-// and a bar that fills while it's held.
-function updatePoseCall() {
-  const posing = localTrackers().map((t, i) => ({ t, i })).filter(({ t }) => t.pose);
-  $("pose-call").hidden = !posing.length;
-  if (!posing.length) return;
-  const label = (i) => localTrackers().length > 1 ? `P${i + 1}: ` : "";
-  $("pose-name").textContent = posing.map(({ t, i }) => `${label(i)}${POSES[t.pose].name}`).join("  ·  ");
-  $("pose-hint").textContent = posing.length === 1 ? POSES[posing[0].t.pose].hint : "";
-  const held = Math.max(...posing.map(({ t }) => t.poseHeld ? (performance.now() - t.poseHeld) / POSE_HOLD : 0));
-  $("pose-hold-fill").style.width = `${Math.min(100, held * 100)}%`;
+// Full-screen callouts for the player who has to act, big enough to read from across
+// the room: a move switch counts down until reps count again, and Strike a Pose
+// stays up with a hold bar until the pose is struck or the spell wears off.
+// Only this device's players get them; a pose outranks a switch.
+const callout = { who: "", move: "", until: 0, timer: 0 };
+export function showSwitchCallout(who, move, until) {
+  Object.assign(callout, { who, move, until });
+  clearTimeout(callout.timer);
+  callout.timer = setTimeout(renderCallout, Math.max(0, until - performance.now()) + 50);
+  renderCallout();
+}
+export function hideCallout() {
+  clearTimeout(callout.timer);
+  callout.until = 0;
+  $("callout").hidden = true;
+}
+function renderCallout() {
+  const box = $("callout"), now = performance.now();
+  const playing = state.status === "playing";
+  const many = localTrackers().length > 1;
+  const posing = playing ? localTrackers().map((t, i) => ({ t, i })).filter(({ t }) => t.pose) : [];
+  if (posing.length) {
+    box.className = `callout pose${posing.length > 1 ? " multi" : ""}`;
+    $("callout-label").textContent = "Strike a pose";
+    $("callout-title").textContent = posing.map(({ t, i }) => `${many ? `P${i + 1}: ` : ""}${POSES[t.pose].name}`).join("  ·  ");
+    $("callout-hint").textContent = posing.length === 1 ? POSES[posing[0].t.pose].hint : "";
+    const held = Math.max(...posing.map(({ t }) => t.poseHeld ? (now - t.poseHeld) / POSE_HOLD : 0));
+    $("callout-hold").hidden = false;
+    $("callout-hold-fill").style.width = `${Math.min(100, held * 100)}%`;
+    $("callout-count").textContent = "";
+  } else if (playing && now < callout.until) {
+    box.className = "callout switch";
+    $("callout-label").textContent = `${callout.who}Switch to`;
+    $("callout-title").textContent = callout.move;
+    $("callout-hint").textContent = "";
+    $("callout-hold").hidden = true;
+    $("callout-count").textContent = String(Math.ceil((callout.until - now) / 1000));
+  } else {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
 }
 export function updateTip() {
   const moves = [...new Set(localTrackers().map((t) => t.exercise).filter(Boolean))];

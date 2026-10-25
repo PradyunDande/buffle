@@ -4,7 +4,7 @@ import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, POSE_HOLD, POSE_LINES, POSE_TIMEOUT, POSES, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
 import { broadcastState } from "./party.js";
 import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
-import { $, clearAlert, confetti, flashAndShake, fx, renderSprite, resetSpeech, setResults, show, showAlert, sound, updateHud, updateTip } from "./ui.js";
+import { $, clearAlert, confetti, flashAndShake, fx, hideCallout, renderSprite, resetSpeech, setResults, show, showAlert, showSwitchCallout, sound, updateHud, updateTip } from "./ui.js";
 
 export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
@@ -95,7 +95,7 @@ function switchMove(index, now, move = pickMove(state.trackers[index].exercise))
   // Guests announce their own switches when the next state update arrives.
   if (duel ? index === 0 : !online() || index === state.myIndex) {
     fx("sound", "warn");
-    showAlert(solo() || duel ? `SWITCH TO ${name}!` : `P${index + 1}: SWITCH TO ${name}!`, "phase", t.readyAt - now);
+    showSwitchCallout(solo() || duel ? "" : `P${index + 1} · `, NAMES[t.exercise], t.readyAt);
   }
   updateTip();
 }
@@ -140,9 +140,7 @@ function startPose(index, now) {
   fx("bossSay", line.replace("{name}", () => playerName(index)).replace("{pose}", () => pose));
   fx("floatText", index, "FROZEN!", "bad");
   fx("sound", "warn");
-  if (!online() || index === state.myIndex) {
-    showAlert(`${solo() ? "" : `P${index + 1}: `}STRIKE A POSE: ${pose.toUpperCase()}!`, "phase", POSE_TIMEOUT);
-  }
+  // The full-screen pose callout follows the frozen state on the player's own device.
   updateHud();
 }
 // `struck` is false when the spell simply wore off.
@@ -248,6 +246,7 @@ export function stopRound() {
   state.tick = state.countdownTimer = state.lobbyTimer = 0;
   if (!online()) stopMedia();
   clearAlert();
+  hideCallout();
   state.status = "idle";
 }
 

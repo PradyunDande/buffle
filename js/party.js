@@ -1,12 +1,12 @@
 /* Remote party gameplay: lobby, roster, host-to-guest sync, and the camera grid. */
 
 import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points, POSE_TIMEOUT, POSES } from "./config.js";
+import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points, POSES } from "./config.js";
 import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound, strikePoseFor } from "./game.js";
 import { cleanCode, createParty, listPublicParties, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { addAudioControls, applyAudio, playWithSound, startVoice, stopVoice, updateMicButton } from "./voice.js";
-import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
+import { $, confetti, EFFECTS, setResults, show, showSwitchCallout, sound, toast, updateHud, updateTip } from "./ui.js";
 
 // Remote party: the host runs the fight and streams state to guests. Each guest
 // tracks its own camera, reports reps, and mirrors the host's HUD and effects.
@@ -244,12 +244,11 @@ function applySnapshot(snapshot) {
   const t = state.trackers[0];
   const ready = Math.max(0, Number(snapshot.ready?.[state.myIndex]) || 0);
   const hadMove = Boolean(t.exercise);
-  if (applyMoves(snapshot.moves) && hadMove) showAlert(`SWITCH TO ${NAMES[t.exercise].toUpperCase()}!`, "phase", Math.max(1500, ready));
+  if (applyMoves(snapshot.moves) && hadMove) showSwitchCallout("", NAMES[t.exercise], performance.now() + ready);
   t.readyAt = performance.now() + ready;
   // Strike a Pose: the host decides who is frozen; this guest watches for its own pose.
   const pose = snapshot.poses?.[state.myIndex];
   const frozen = typeof pose === "string" && Object.hasOwn(POSES, pose) ? pose : null;
-  if (frozen && frozen !== t.pose) showAlert(`STRIKE A POSE: ${POSES[frozen].name.toUpperCase()}!`, "phase", POSE_TIMEOUT);
   if (frozen !== t.pose) { t.pose = frozen; t.poseHeld = 0; t.poseSent = false; if (frozen) resetMotion(t); }
   state.status = "playing";
   state.bossHp = Number(snapshot.hp) || 0;
