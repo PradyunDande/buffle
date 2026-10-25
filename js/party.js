@@ -143,7 +143,6 @@ function showPartyResults(message) {
   const [title, text, rating, ratingClass, stats] = message.result;
   stopRound();
   state.advance = false;
-  $("results-eyebrow").textContent = "THE BATTLE IS OVER";
   setResults(String(title), String(text), String(rating), ["gold", "silver", "bronze"].includes(ratingClass) ? ratingClass : "",
     stats.slice(0, 4).map((stat) => Array.isArray(stat) ? stat.map(String) : ["", ""]));
   setResultActions(Boolean(message.won));

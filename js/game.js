@@ -276,7 +276,6 @@ function finishRound(won = false) {
   if (state.mode === "duel") {
     const [a, b] = state.scores;
     const knockout = Math.abs(rope()) >= 1;
-    $("results-eyebrow").textContent = "THE DUEL IS OVER";
     setResults(a === b ? "It's a draw!" : `Player ${a > b ? 1 : 2} wins!`,
       knockout ? "Pulled clean across the line!" : "Time! The higher score takes the crown.",
       a === b ? "DRAW" : `P${a > b ? 1 : 2} WINS`, a === b ? "silver" : "gold",
@@ -285,7 +284,6 @@ function finishRound(won = false) {
   } else {
     const b = boss();
     const mvp = state.mode === "party" && state.roster.length > 1 ? partyMvp() : "";
-    $("results-eyebrow").textContent = "THE BATTLE IS OVER";
     const result = [won ? `${b.name} is defeated!` : `${b.name} wins this time`,
       (won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
       // Rank by hearts left: all three is S, then A, then B.
