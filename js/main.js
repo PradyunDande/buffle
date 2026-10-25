@@ -3,7 +3,7 @@
 import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
 import { setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
 import { cleanCode } from "./network.js";
-import { cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty } from "./party.js";
+import { browseParties, cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty, setVisibility } from "./party.js";
 import { isGuest, online, saveSettings, settings, state } from "./state.js";
 import { $, GEAR, pixelArt, QUESTION, show, toast } from "./ui.js";
 import { toggleMic } from "./voice.js";
@@ -21,6 +21,7 @@ $("play-local").addEventListener("click", () => { if (chosenMode === "boss") sho
 $("play-online").addEventListener("click", () => {
   $("player-name").value = $("match-name").value = settings.name;
   show(chosenMode === "boss" ? "remote" : "duel-online");
+  setVisibility(document.querySelector("[data-visibility].selected")?.dataset.visibility);
 });
 document.querySelectorAll("[data-players]").forEach((button) => button.addEventListener("click", () => setPlayers(Number(button.dataset.players))));
 // Player 1's name is also their remote party name.
@@ -56,9 +57,13 @@ $("again-button").addEventListener("click", () => {
   else if (state.mode === "duel") startGame();
   else startFight();
 });
-$("create-party").addEventListener("click", () => openParty(false));
-$("join-party").addEventListener("click", () => openParty(true));
-$("join-code").addEventListener("keydown", (event) => { if (event.key === "Enter") openParty(true); });
+$("create-party").addEventListener("click", () => openParty("create"));
+$("join-party").addEventListener("click", () => openParty("join"));
+$("join-code").addEventListener("keydown", (event) => { if (event.key === "Enter") openParty("join"); });
+document.querySelectorAll("[data-visibility]").forEach((button) => button.addEventListener("click", () => setVisibility(button.dataset.visibility)));
+$("player-name").addEventListener("input", () => setVisibility(document.querySelector("[data-visibility].selected")?.dataset.visibility));
+$("browse-parties").addEventListener("click", browseParties);
+$("refresh-parties").addEventListener("click", browseParties);
 $("start-party").addEventListener("click", hostStart);
 $("copy-invite").addEventListener("click", copyInvite);
 $("player-name").value = settings.name;

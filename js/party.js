@@ -3,7 +3,7 @@
 import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
 import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
-import { cleanCode, createParty, MAX_PLAYERS } from "./network.js";
+import { cleanCode, createParty, listPublicParties, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, online, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { addAudioControls, applyAudio, playWithSound, startVoice, stopVoice, updateMicButton } from "./voice.js";
 import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
@@ -19,7 +19,9 @@ function newParty() {
     onStream: (id, stream) => { if (state.party === party) { state.remoteStreams.set(id, stream); renderTiles(); } },
     onStreamEnd: (id) => { if (state.party === party) { state.remoteStreams.delete(id); renderTiles(); } },
     onClose: (reason) => { if (state.party === party) leaveParty(reason); },
-    onError: (error) => { if (state.party === party) toast(error?.message || "Connection problem"); }
+    onError: (error) => { if (state.party === party) toast(error?.message || "Connection problem"); },
+    // What a public party tells people browsing for one.
+    describe: () => ({ difficulty: difficulty().name, fighting: state.status !== "lobby" })
   });
   return party;
 }
@@ -28,25 +30,83 @@ function setRemoteBusy(busy) {
   $("create-party").textContent = busy ? "Connecting…" : "Create Party";
   $("join-party").textContent = busy ? "Connecting…" : "Join Party";
 }
-export async function openParty(join) {
+// Hosting is private (join by code) or public (listed by name for anyone browsing).
+let visibility = "private";
+const defaultPartyName = () => `${$("player-name").value.trim() || settings.name || "Adventurer"}'s Party`;
+export function setVisibility(choice) {
+  visibility = choice === "public" ? "public" : "private";
+  document.querySelectorAll("[data-visibility]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.visibility === visibility);
+  });
+  $("party-name-field").hidden = visibility !== "public";
+  $("party-name").placeholder = defaultPartyName();
+}
+// `kind` is "create", "join" (by code), or "public" (a listing from the browser).
+// Resolves to whether the player made it into the party.
+export async function openParty(kind, listing) {
   settings.name = $("player-name").value.trim().slice(0, 16);
   saveSettings();
   const code = cleanCode($("join-code").value);
-  if (join && code.length !== 5) { toast("Enter the 5-character party code."); return; }
+  if (kind === "join" && code.length !== 5) { toast("Enter the 5-character party code."); return false; }
   stopRound();
   const party = newParty();
   Object.assign(state, { mode: "party", party, roster: [], difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
   setRemoteBusy(true);
   try {
-    if (join) await party.join(code, settings.name);
+    if (kind === "join") await party.join(code, settings.name);
+    else if (kind === "public") await party.joinPublic(listing, settings.name);
+    else if (visibility === "public") await party.createPublic(settings.name, $("party-name").value.trim() || defaultPartyName());
     else await party.create(settings.name);
   } catch (error) {
     party.leave();
     if (state.party === party) { state.party = null; state.mode = "solo"; }
     toast(error?.message || "Could not connect to the party.");
-    return;
+    return false;
   } finally { setRemoteBusy(false); }
-  if (state.party === party) enterLobby();
+  if (state.party !== party) return false;
+  enterLobby();
+  return true;
+}
+
+// The public party browser asks every public room what it holds.
+export async function browseParties() {
+  show("browse");
+  const status = $("browse-status"), list = $("public-list");
+  status.textContent = "Looking for public parties…";
+  list.replaceChildren();
+  $("refresh-parties").disabled = true;
+  let parties;
+  try { parties = await listPublicParties(); }
+  catch (error) { status.textContent = error?.message || "Could not reach the party service."; return; }
+  finally { $("refresh-parties").disabled = false; }
+  if (state.screen !== "browse") return;
+  status.textContent = parties.length ? "" : "No public parties right now.";
+  list.replaceChildren(...parties.map((listing) => {
+    const row = document.createElement("div");
+    row.className = "public-row";
+    const info = document.createElement("div");
+    info.className = "public-info";
+    const name = document.createElement("strong");
+    name.textContent = listing.name;
+    const detail = document.createElement("span");
+    detail.textContent = [`${listing.players} / ${listing.max}`, listing.difficulty.slice(0, 12), listing.fighting ? "In a scuffle" : "In the lobby"]
+      .filter(Boolean).join(" · ");
+    info.append(name, detail);
+    const join = document.createElement("button");
+    join.type = "button";
+    join.className = "button primary small";
+    const full = listing.players >= listing.max;
+    join.textContent = full ? "Full" : "Join";
+    join.disabled = full;
+    join.addEventListener("click", async () => {
+      list.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+      join.textContent = "Joining…";
+      // If the party filled up or closed meanwhile, show the list as it is now.
+      if (!(await openParty("public", listing))) browseParties();
+    });
+    row.append(info, join);
+    return row;
+  }));
 }
 // Online 1v1 matchmaking is always on Hard. The search runs from the 1v1 screen;
 // once two players are linked they go straight to the match screen.
@@ -235,7 +295,12 @@ export function enterLobby() {
 function renderLobby() {
   if (state.mode !== "party" || !state.party) return;
   const host = state.party.isHost, count = playerCount(), level = difficulty();
-  $("party-code").textContent = state.party.code;
+  // A public party is known by its name; a private one by the code to share.
+  const isPublic = Boolean(state.party.isPublic);
+  $("lobby-code-label").textContent = isPublic ? "PUBLIC PARTY" : "PARTY CODE";
+  $("party-code").textContent = isPublic ? state.party.publicName : state.party.code;
+  $("party-code").classList.toggle("party-name", isPublic);
+  $("copy-invite").hidden = isPublic;
   $("lobby-status").textContent = `${count} of ${MAX_PLAYERS} players`;
   $("lobby-hp").textContent = `${level.hp * count} HP`;
   $("boss-picker").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, item], i) => {

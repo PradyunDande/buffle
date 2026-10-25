@@ -535,6 +535,86 @@ body:has(#game.active) .corner {
   margin-top: auto;
 }
 
+.remote-card #browse-parties {
+  margin-top: 12px;
+}
+
+.visibility-row {
+  margin-bottom: 16px;
+  gap: 10px;
+}
+
+.visibility-row .choice {
+  min-height: 0;
+  padding: 10px 12px;
+  gap: 4px;
+}
+
+.visibility-row .choice strong {
+  font-size: 22px;
+}
+
+.visibility-row .choice span {
+  font-size: 16px;
+}
+
+.browse-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.browse-head h2 {
+  margin: 0;
+}
+
+.browse-status {
+  min-height: 1.3em;
+  margin: 8px 0 16px;
+  color: var(--text-muted);
+}
+
+.public-list {
+  display: grid;
+  gap: 12px;
+}
+
+.public-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border: var(--stroke) solid var(--ui-border);
+  background: var(--bg-base);
+  box-shadow: var(--drop);
+}
+
+.public-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.public-info strong {
+  overflow: hidden;
+  color: var(--ui-accent-light);
+  font: 26px var(--font-display);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.public-info span {
+  color: var(--text-muted);
+  font-size: 18px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
 .remote-card .field {
   margin: 0 0 16px;
 }
@@ -1186,6 +1266,14 @@ body:has(#game.active) .corner {
   color: var(--text-muted);
   font-size: 17px;
   letter-spacing: .14em;
+}
+
+.lobby-code strong.party-name {
+  max-width: 260px;
+  font-size: 28px;
+  letter-spacing: .04em;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .lobby-code strong {

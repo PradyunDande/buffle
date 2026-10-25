@@ -5,13 +5,18 @@
 
    Matchmaking has no server of its own: a few well-known waiting-room ids act as
    a queue. A searcher joins whoever is waiting in one, or takes a free one and
-   waits there itself. */
+   waits there itself.
+
+   Public parties work the same way: each takes one of a few well-known ids, and
+   browsing asks every one of those ids what party, if any, is behind it. */
 const PEERJS_URL = "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js";
 const PREFIX = "buffle-party-";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const MAX_PLAYERS = 6;
 const MATCH_PREFIX = "buffle-match-hard-";
 const MATCH_SLOTS = 6;
+const PUBLIC_PREFIX = "buffle-public-";
+const PUBLIC_SLOTS = 12;
 const JOIN_ERRORS = {
   missing: "No party found with that code.",
   full: "That party is full.",
@@ -33,6 +38,53 @@ function loadPeerJs() {
 function randomCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(5));
   return [...bytes].map((n) => ALPHABET[n % ALPHABET.length]).join("");
+}
+export function cleanPartyName(name) {
+  return String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 24) || "Public Party";
+}
+// Asks every public room what party it holds. Resolves to the parties that answered.
+export async function listPublicParties() {
+  await loadPeerJs();
+  const probe = await new Promise((resolve, reject) => {
+    const candidate = new Peer();
+    candidate.on("open", () => resolve(candidate));
+    candidate.on("error", (error) => { if (!candidate.open) reject(error); });
+  });
+  // An id nobody holds fails on the peer, not the link; the message names the id.
+  const missing = new Map();
+  probe.on("error", (error) => {
+    if (error.type !== "peer-unavailable") return;
+    const id = /peer (\S+)/.exec(error.message || "")?.[1];
+    missing.get(id)?.();
+  });
+  const ask = (slot) => new Promise((resolve) => {
+    const id = PUBLIC_PREFIX + slot;
+    let settled = false;
+    const done = (info) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      missing.delete(id);
+      link.close();
+      resolve(info);
+    };
+    const timer = setTimeout(() => done(null), 5000);
+    missing.set(id, () => done(null));
+    const link = probe.connect(id, { reliable: true });
+    link.on("open", () => link.send({ t: "info" }));
+    link.on("data", (message) => {
+      if (message?.t !== "info") return;
+      const count = (n, max) => Math.max(0, Math.min(max, Math.floor(Number(n) || 0)));
+      done({ slot, name: cleanPartyName(message.name), players: count(message.players, MAX_PLAYERS),
+        max: count(message.max, MAX_PLAYERS) || MAX_PLAYERS, difficulty: String(message.difficulty ?? ""), fighting: Boolean(message.fighting) });
+    });
+    link.on("error", () => done(null));
+  });
+  try {
+    return (await Promise.all(Array.from({ length: PUBLIC_SLOTS }, (_, slot) => ask(slot)))).filter(Boolean);
+  } finally {
+    probe.destroy();
+  }
 }
 class JoinError extends Error {
   constructor(reason) { super(JOIN_ERRORS[reason]); this.reason = reason; }
@@ -164,6 +216,12 @@ export function createParty(handlers) {
 
   function acceptGuest(link) {
     link.on("data", (message) => {
+      // Someone browsing public parties: say what this party is, then hang up.
+      if (message?.t === "info" && party.isPublic && !links.has(link.peer)) {
+        link.send({ t: "info", name: party.publicName, players: party.members.length, max: party.maxPlayers, ...handlers.describe?.() });
+        setTimeout(() => link.close(), 1000);
+        return;
+      }
       if (message?.t === "hello" && !links.has(link.peer)) {
         // While a waiting player checks other rooms, it turns newcomers away.
         if (party.members.length >= party.maxPlayers || probing) {
@@ -199,6 +257,25 @@ export function createParty(handlers) {
     party.isHost = true;
     peer.on("connection", acceptGuest);
     setMembers([{ id: party.id, name: cleanName(name) }]);
+  };
+
+  // A public party takes the first free public room instead of a random code.
+  party.createPublic = async (name, partyName) => {
+    await loadPeerJs();
+    for (let slot = 0; ; slot++) {
+      if (slot >= PUBLIC_SLOTS) throw new Error("Too many public parties right now. Try a private one.");
+      try { await open(PUBLIC_PREFIX + slot); break; }
+      catch (error) { if (error.type !== "unavailable-id") throw error; }
+    }
+    Object.assign(party, { isHost: true, isPublic: true, publicName: cleanPartyName(partyName) });
+    peer.on("connection", acceptGuest);
+    setMembers([{ id: party.id, name: cleanName(name) }]);
+  };
+  party.joinPublic = async (listing, name) => {
+    await loadPeerJs();
+    Object.assign(party, { isPublic: true, publicName: cleanPartyName(listing.name) });
+    try { await joinHost(await open(), PUBLIC_PREFIX + listing.slot, name, 12000); }
+    catch (error) { throw error.reason === "full" ? error : new Error("That party has closed."); }
   };
 
   party.join = async (rawCode, name) => {
