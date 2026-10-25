@@ -159,19 +159,23 @@ function drawSkeleton(assigned) {
   assigned.forEach((entry, index) => {
     if (!entry) return;
     const landmarks = entry.landmarks;
-    // Skeletons use the theme's player colors.
-    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue(index ? "--ui-alt" : "--ui-accent").trim();
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.lineWidth = Math.max(3, canvas.width / 280);
+    // Skeletons use the theme's player colors, over a dark outline so they stand out
+    // from the video and from each other.
+    const color = getComputedStyle(document.documentElement).getPropertyValue(index ? "--ui-alt" : "--ui-accent").trim();
+    const width = Math.max(3, canvas.width / 280), radius = Math.max(3, canvas.width / 200), edge = Math.max(2, width * .6);
     ctx.lineCap = "round";
-    for (const [a, b] of BONES) {
-      if (!joint(landmarks, a) || !joint(landmarks, b)) continue;
-      ctx.beginPath(); ctx.moveTo(landmarks[a].x * canvas.width, landmarks[a].y * canvas.height);
-      ctx.lineTo(landmarks[b].x * canvas.width, landmarks[b].y * canvas.height); ctx.stroke();
-    }
-    for (const i of [11,12,13,14,15,16,23,24,25,26,27,28]) {
-      const p = joint(landmarks, i); if (!p) continue;
-      ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, Math.max(3, canvas.width / 200), 0, Math.PI * 2); ctx.fill();
+    for (const [stroke, grow] of [["#000", edge], [color, 0]]) {
+      ctx.strokeStyle = ctx.fillStyle = stroke;
+      ctx.lineWidth = width + grow * 2;
+      for (const [a, b] of BONES) {
+        if (!joint(landmarks, a) || !joint(landmarks, b)) continue;
+        ctx.beginPath(); ctx.moveTo(landmarks[a].x * canvas.width, landmarks[a].y * canvas.height);
+        ctx.lineTo(landmarks[b].x * canvas.width, landmarks[b].y * canvas.height); ctx.stroke();
+      }
+      for (const i of [11,12,13,14,15,16,23,24,25,26,27,28]) {
+        const p = joint(landmarks, i); if (!p) continue;
+        ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, radius + grow, 0, Math.PI * 2); ctx.fill();
+      }
     }
   });
 }

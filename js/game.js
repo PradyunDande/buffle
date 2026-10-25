@@ -4,7 +4,7 @@ import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, points, POSE_HOLD, POSE_LINES, POSE_TIMEOUT, POSES, REP_GAP, REP_VALUE, SWITCH_CALLOUT } from "./config.js";
 import { broadcastState } from "./party.js";
 import { activeTrackers, localTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, online, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
-import { $, clearAlert, confetti, flashAndShake, fx, hideCallout, renderSprite, resetSpeech, setResults, show, showAlert, showSwitchCallout, sound, updateHud, updateTip } from "./ui.js";
+import { $, clearAlert, confetti, flashAndShake, fx, hideCallout, renderBattle, resetSpeech, setResults, show, showAlert, showSwitchCallout, sound, updateHud, updateTip } from "./ui.js";
 
 export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
@@ -61,12 +61,12 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
     fx("flashAndShake", "flash");
     fx("sound", "sync");
   }
-  hitBoss(damage);
+  hitBoss(damage, partner && teamMode() ? "sync" : "hit");
 }
 
-function hitBoss(amount) {
+function hitBoss(amount, kind) {
   state.bossHp = Math.max(0, scoreText(state.bossHp - amount));
-  fx("flashAndShake", "hit", "boss-sprite");
+  fx("battle", kind, amount);
   updateHud();
   if (state.bossHp <= 0) finishRound(true);
 }
@@ -178,7 +178,7 @@ function bossAttack(now) {
   state.nextAttackAt = now + difficulty().attackEvery;
   const left = state.hearts ? ` ${state.hearts} heart${state.hearts === 1 ? "" : "s"} left` : "";
   fx("showAlert", `${boss().attack}!${left}`, "danger", 2000);
-  fx("flashAndShake", "lunge", "boss-sprite");
+  fx("battle", "attack");
   fx("flashAndShake", "shake");
   fx("sound", "hurt");
   if (state.hearts <= 0) finishRound(false);
@@ -204,7 +204,6 @@ export function resetRound() {
     state.bossMax = level.hp * playerCount();
     state.bossHp = state.bossMax;
     state.duration = level.time * 1000;
-    renderSprite($("boss-sprite"), b);
     resetSpeech(b.taunt);
   }
   state.lastVideoTime = -1;
@@ -223,6 +222,7 @@ export function resetRound() {
   $("shared-mark").textContent = duel ? "Versus" : "Team";
   $("p2-score").hidden = solo();
   $("p2-label").hidden = solo();
+  if (!duel) renderBattle();
   updateTip();
   $("waiting").hidden = true;
   if (!state.stream) {
@@ -341,11 +341,18 @@ function finishRound(won = false) {
       [["DAMAGE", `${number(scoreText(state.bossMax - state.bossHp))} / ${state.bossMax}`], ["TOTAL REPS", reps], ["CLEAN REPS", clean],
         teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["HEARTS LEFT", `${state.hearts} / ${HEARTS}`]]];
   }
-  setResults(...result);
-  if (isHost()) state.party.broadcast({ t: "results", result, won });
-  setResultActions(won);
-  show("results");
-  if (won) { sound("victory"); confetti(); }
+  // A boss fight ends on the battle screen first: the loser faints, then the results.
+  const showResults = () => {
+    setResults(...result);
+    if (isHost()) state.party.broadcast({ t: "results", result, won });
+    setResultActions(won);
+    show("results");
+    if (won) { sound("victory"); confetti(); }
+  };
+  if (state.mode === "duel") { showResults(); return; }
+  fx("battle", won ? "faint" : "lose");
+  const session = state.session;
+  setTimeout(() => { if (session === state.session) showResults(); }, 1500);
 }
 export function setResultActions(won) {
   const party = online(), duel = state.mode === "duel";

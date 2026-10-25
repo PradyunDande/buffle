@@ -53,7 +53,9 @@ Remote play uses [PeerJS](https://peerjs.com/) (loaded from a CDN) to connect br
 
 ## Boss art
 
-Each boss in `BOSSES` ([js/config.js](js/config.js)) has a 16×16 pixel map drawn on a canvas. To use generated pixel art instead, add the image (e.g. `assets/bosses/wolf.png`) and set that boss's `image` field to its path. Square images with transparent backgrounds look best.
+Boss fights play out on a monster-battle screen: the boss stands between its status panel and the team's and talks in a speech bubble. In landscape the battle takes a narrow column on the left and the cameras the rest, with online camera tiles arranged to fill that space; in portrait the battle sits above the cameras. The boss blinks when reps land, lunges and throws its attack (`attackFx`) when it strikes, pants at low HP, and faints when beaten.
+
+Each boss in `BOSSES` ([js/config.js](js/config.js)) has a full-body pixel map (any size; "." is empty) drawn on a canvas with a dark outline added around it, plus a `ground` color for the patch it stands on. To use generated pixel art instead, add the image (e.g. `assets/bosses/wolf.png`) and set that boss's `image` field to its path. Square images with transparent backgrounds look best.
 
 ## Code layout
 

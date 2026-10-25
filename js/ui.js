@@ -2,7 +2,7 @@
 
 import { HEARTS, NAMES, POSE_HOLD, POSES, TIPS } from "./config.js";
 import { tileFor, updateTileNames } from "./party.js";
-import { comboMultiplier, isFrenzy, isHost, localTrackers, online, number, rope, scoreText, settings, state } from "./state.js";
+import { boss, comboMultiplier, difficulty, isFrenzy, isHost, localTrackers, online, number, playerCount, playerName, rope, scoreText, settings, state } from "./state.js";
 
 export const $ = (id) => document.getElementById(id);
 
@@ -125,29 +125,104 @@ export function floatText(index, text, className = "") {
   setTimeout(() => item.remove(), 1250);
 }
 // Game effects run here and, on a party host, on every guest's screen too.
-export const EFFECTS = { floatText, showAlert, clearAlert, confetti, flashAndShake, sound, bossSay };
+export const EFFECTS = { floatText, showAlert, clearAlert, confetti, flashAndShake, sound, bossSay, battle };
 export function fx(name, ...args) {
   EFFECTS[name](...args);
   if (isHost()) state.party.broadcast({ t: "fx", name, args });
 }
 
-export function renderSprite(container, b) {
+// Draws a pixel map one pixel bigger all round, outlined in near-black wherever an
+// empty pixel touches a filled one.
+export function drawSprite(rows, palette) {
+  const width = rows[0].length, height = rows.length;
+  const canvas = document.createElement("canvas");
+  canvas.width = width + 2;
+  canvas.height = height + 2;
+  const ctx = canvas.getContext("2d");
+  const filled = (x, y) => Boolean(palette[rows[y]?.[x]]);
+  for (let y = -1; y <= height; y++) for (let x = -1; x <= width; x++) {
+    const color = filled(x, y) ? palette[rows[y][x]]
+      : filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1) ? "#120d0a" : null;
+    if (!color) continue;
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 1, y + 1, 1, 1);
+  }
+  return canvas;
+}
+// Sized in sprite pixels (--px), so everything in the battle shares one pixel scale.
+function sizeSprite(element, width, height) {
+  element.style.width = `calc(var(--px) * ${width})`;
+  element.style.height = `calc(var(--px) * ${height})`;
+}
+function renderSprite(container, b) {
   if (b.image) {
     const image = new Image();
     image.src = b.image;
     image.alt = "";
     container.replaceChildren(image);
+    sizeSprite(container, 34, 34);
     return;
   }
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 16;
-  const ctx = canvas.getContext("2d");
-  b.sprite.forEach((row, y) => [...row].forEach((key, x) => {
-    if (!b.palette[key]) return;
-    ctx.fillStyle = b.palette[key];
-    ctx.fillRect(x, y, 1, 1);
-  }));
-  container.replaceChildren(canvas);
+  container.replaceChildren(drawSprite(b.sprite, b.palette));
+  sizeSprite(container, b.sprite[0].length + 2, b.sprite.length + 2);
+}
+
+// Sets the battle up for this fight's boss: its ground, panel, and sprite.
+export function renderBattle() {
+  const b = boss(), count = playerCount();
+  $("arena").style.setProperty("--ground", b.ground);
+  $("boss-name").textContent = b.name.replace(/^The /, "");
+  $("boss-level").textContent = `Lv${difficulty().level}`;
+  renderSprite($("boss-sprite"), b);
+  $("team-name").textContent = online() && count > 1 ? "The Party" : count === 2 ? `${playerName(0)} & ${playerName(1)}` : playerName(0);
+  $("boss-sprite").classList.remove("fainted", "hurt", "lunge");
+  flashAndShake("entering", "arena");
+}
+
+// Effect icons for the battle, drawn in their own color: hits on the boss, and
+// what each boss's attack throws (its `attackFx`).
+const STAR = ["...X...", ".X.X.X.", "..XXX..", "XXX.XXX", "..XXX..", ".X.X.X.", "...X..."];
+const ATTACK_FX = {
+  wind: { color: "#e8f6ff", rows: ["..XXXX.", ".X....X", "X..XX.X", "X.X..X.", "X..X...", ".X..XXX", "..XX..."] },
+  rock: { color: "#8a6a48", rows: ["..XXX..", ".XXXXX.", "XXX.XXX", "XXXXXXX", "XX.XXXX", ".XXXXX.", "..XXX.."] },
+  curse: { color: "#b07ee0", rows: [".XXXXX.", "XXXXXXX", "X..X..X", "XXXXXXX", ".XX.XX.", ".XXXXX.", "..X.X.."] },
+  fire: { color: "#f39b2f", rows: ["...X...", "..XX...", "..XXX.X", ".XXXXXX", "XXX.XXX", "XX...XX", ".XX.XX."] }
+};
+// Effects land around the boss, except attacks, which cross the whole field.
+function spawn(element, color, style, ms, layer = document.querySelector(".foe-spot")) {
+  element.classList.add("fx");
+  element.style.color = color;
+  Object.assign(element.style, style);
+  layer.append(element);
+  setTimeout(() => element.remove(), ms);
+}
+// Monster-battle reactions: `hit` and `sync` when reps land (with the damage dealt),
+// `attack` when the boss strikes, and `faint` or `lose` when the fight is decided.
+export function battle(kind, amount = 0) {
+  if ($("arena").hidden) return;
+  if (kind === "faint") { $("boss-sprite").classList.add("fainted"); return; }
+  // Beating the players, the boss gloats with one last lunge.
+  if (kind === "lose") { flashAndShake("lunge", "boss-sprite"); return; }
+  if (!settings.effects) return;
+  if (kind === "attack") {
+    const { rows, color } = ATTACK_FX[boss().attackFx] ?? ATTACK_FX.rock;
+    flashAndShake("lunge", "boss-sprite");
+    for (let i = 0; i < 3; i++) spawn(pixelArt(rows, "bolt"), color, { animationDelay: `${i * 90}ms` }, 800, $("battle-fx"));
+    setTimeout(() => { flashAndShake("shake", "team-panel"); flashAndShake("shake", "battle-field"); }, 480);
+    return;
+  }
+  const sync = kind === "sync";
+  flashAndShake("hurt", "boss-sprite");
+  if (sync) flashAndShake("shake", "battle-field");
+  for (let i = 0; i < (sync ? 3 : 1); i++) {
+    spawn(pixelArt(STAR, "burst"), sync ? "#f8c030" : "#fff",
+      { left: `${10 + Math.random() * 60}%`, top: `${10 + Math.random() * 50}%`, animationDelay: `${i * 80}ms` }, 700);
+  }
+  if (!amount) return;
+  const damage = document.createElement("span");
+  damage.className = "damage";
+  damage.textContent = `-${number(scoreText(amount))}`;
+  spawn(damage, "", { left: `${30 + Math.random() * 30}%`, top: "0" }, 800);
 }
 
 export function updateHud() {
@@ -159,9 +234,13 @@ export function updateHud() {
     $("p2-points").textContent = number(scoreText(state.scores[1]));
     $("rope-marker").style.left = `${50 - rope() * 50}%`;
   } else {
-    $("boss-hp-fill").style.width = `${state.bossHp / state.bossMax * 100}%`;
-    $("boss-hp-label").textContent = `${Math.ceil(state.bossHp)} / ${state.bossMax} HP`;
-    $("move-label").textContent = moveLabel();
+    // The boss's HP bar goes yellow at half and red at a fifth; near the end it pants.
+    const left = state.bossMax ? state.bossHp / state.bossMax : 1;
+    $("boss-hp-fill").style.width = `${left * 100}%`;
+    $("boss-hp-fill").parentElement.className = `hp-bar${left <= .2 ? " low" : left <= .5 ? " mid" : ""}`;
+    $("boss-hp-label").textContent = `${Math.ceil(state.bossHp)} / ${state.bossMax}`;
+    $("boss-sprite").classList.toggle("weak", left > 0 && left <= .25);
+    renderMoves();
     renderHearts(state.hearts);
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
   }
@@ -174,10 +253,20 @@ export function updateHud() {
   renderCallout();
 }
 
-// The HUD names each local player's move, and "FROZEN" during Strike a Pose.
-function moveLabel() {
-  const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${t.pose ? " · FROZEN" : ""}`);
-  return moves.length === 1 ? `${online() ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
+// The move box names each local player's move in big letters, with "FROZEN" during
+// Strike a Pose. It only rebuilds when something changes, so a new move pops in.
+function renderMoves() {
+  const box = $("move-box"), trackers = localTrackers(), many = trackers.length > 1;
+  const key = trackers.map((t) => `${t.exercise}:${Boolean(t.pose)}`).join();
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.replaceChildren(...trackers.map((t, i) => {
+    const row = document.createElement("div");
+    row.className = "move-row";
+    row.innerHTML = `<span class="${many ? `p${i + 1}` : ""}">${many ? `P${i + 1}` : online() ? "Your move" : "Move"}</span>`
+      + `<strong>${t.exercise ? NAMES[t.exercise] : "—"}</strong>${t.pose ? "<em>Frozen</em>" : ""}`;
+    return row;
+  }));
 }
 // Full-screen callouts for the player who has to act, big enough to read from across
 // the room: a move switch shows for a moment, and Strike a Pose

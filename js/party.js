@@ -353,7 +353,6 @@ function renderTiles() {
   const grid = $("stage-grid");
   const others = online() ? state.roster.filter((m) => m.id !== state.party?.id) : [];
   grid.classList.toggle("multi", others.length > 0);
-  grid.classList.toggle("many", others.length >= 3);
   const keep = new Set(others.map((m) => m.id));
   grid.querySelectorAll(".remote").forEach((tile) => { if (!keep.has(tile.dataset.peer)) tile.closest(".tile-wrap").remove(); });
   for (const member of others) {
@@ -381,8 +380,29 @@ function renderTiles() {
     placeholder.textContent = stream ? "Camera off" : "Connecting camera…";
     applyAudio(wrap, member.id);
   }
+  fitTiles();
   updateTileNames();
 }
+// The camera tiles take however many columns gives each the biggest picture in the
+// grid's space: beside the boss, two players stack top and bottom; with the whole
+// width, they sit side by side.
+function fitTiles() {
+  const grid = $("stage-grid");
+  if (!grid.classList.contains("multi")) { grid.style.gridTemplateColumns = ""; return; }
+  const count = grid.children.length, gap = 14;
+  const bar = (grid.querySelector(".tile-bar")?.offsetHeight ?? 0) + 8;
+  const limit = getComputedStyle(grid).maxHeight;
+  const width = grid.clientWidth, height = limit === "none" ? grid.clientHeight : parseFloat(limit);
+  let best = 0, columns = 1;
+  for (let c = 1; c <= count; c++) {
+    const rows = Math.ceil(count / c);
+    const size = Math.min((width - gap * (c - 1)) / c, ((height - gap * (rows - 1)) / rows - bar) * 16 / 9);
+    if (size > best) { best = size; columns = c; }
+  }
+  grid.style.gridTemplateColumns = `repeat(${columns}, ${Math.max(120, Math.floor(best))}px)`;
+}
+// Not $(): ui.js and this module import each other, so it may not be ready yet.
+new ResizeObserver(fitTiles).observe(document.getElementById("stage-grid"));
 export function updateTileNames() {
   const party = online();
   $("local-name").hidden = !party;

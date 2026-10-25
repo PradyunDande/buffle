@@ -19,7 +19,7 @@
   --bg-inset: #160f0b;        /* Recessed wells: inputs, bars, the screen glass */
   --bg-raised: #4a3020;       /* Hovered and selected surfaces */
   --text-on-accent: #24180f;  /* Type set on accent fills */
-  --ui-alt: #cb6a4b;          /* Second-player color */
+  --ui-alt: #4fc3f7;          /* Second-player color: cool, so it never reads as P1's gold */
   --ui-info: #4b2a63;         /* Neutral announcements */
   --shadow-hard: #000;        /* Offset arcade shadows */
 
@@ -744,7 +744,6 @@ body:has(#game.active) .corner {
   font: 48px/1 var(--font-display);
 }
 
-.arena,
 .duel-hud,
 .lobby {
   display: grid;
@@ -755,10 +754,6 @@ body:has(#game.active) .corner {
   border: var(--stroke) solid var(--ui-border);
   background: var(--bg-surface);
   box-shadow: var(--drop);
-}
-
-.arena {
-  grid-template-columns: auto 1fr auto;
 }
 
 .duel-hud {
@@ -778,30 +773,135 @@ body:has(#game.active) .corner {
   image-rendering: pixelated;
 }
 
+/* ==========================================================================
+   Boss battle: the boss stands on its patch of ground between its status
+   panel and the team's, and talks in a speech bubble. In landscape it takes a
+   narrow column beside the cameras; in portrait it sits above them.
+   ========================================================================== */
+
+.fight-row {
+  display: grid;
+  gap: 14px;
+}
+
+/* Several cameras online: fitTiles() in party.js picks the columns that give
+   each tile the biggest picture in this space. */
+.stage-grid.multi {
+  max-height: 75vh;
+  justify-content: center;
+}
+
+.stage-grid.multi .stage {
+  max-height: none;
+}
+
+@media (orientation: landscape) {
+  .fight-row:has(> .arena:not([hidden])) {
+    grid-template-columns: minmax(300px, 34%) minmax(0, 1fr);
+    min-height: max(420px, calc(100vh - 240px));
+  }
+
+  .fight-row:has(> .arena:not([hidden])) .stage-grid {
+    align-content: center;
+  }
+
+  /* Beside the boss the cameras fill the row's height, and their own size must
+     not stretch the row. */
+  .fight-row:has(> .arena:not([hidden])) .stage-grid.multi {
+    max-height: none;
+    contain: size;
+  }
+
+  /* A landscape phone is short: the camera stays within the screen. */
+  .fight-row:has(> .arena:not([hidden])) .stage-grid:not(.multi) .stage {
+    width: 100%;
+    min-height: min(280px, 56vh);
+  }
+}
+
+.arena {
+  --px: 6px;          /* One sprite pixel */
+  --ground: #88b04b;  /* Set per boss */
+  display: flex;
+  flex-direction: column;
+}
+
+.arena[hidden] {
+  display: none;
+}
+
+/* Top to bottom: the boss panel, its speech, the boss, the move to do, and the team panel. */
+.battle-field {
+  position: relative;
+  display: grid;
+  flex: 1;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: calc(var(--px) * 3);
+  padding: 0 0 var(--offset);
+}
+
+.foe-spot {
+  position: relative;
+  place-self: center;
+  margin: 0 0 calc(var(--px) * 6);
+}
+
+/* The patch of ground the boss stands on, centered on its feet. */
+.foe-spot::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--px) * -5);
+  width: calc(100% + var(--px) * 8);
+  height: calc(var(--px) * 10);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ground) 70%, var(--bg-inset));
+  box-shadow:
+    inset 0 calc(var(--px) * -2) 0 color-mix(in srgb, var(--ground) 40%, var(--bg-inset)),
+    inset 0 var(--px) 0 color-mix(in srgb, var(--ground) 85%, #fff);
+  transform: translateX(-50%);
+}
+
+/* Clips only below the feet, so a fainting sprite sinks into its ground. */
+.sprite-clip {
+  position: relative;
+  clip-path: inset(-100vh -100vw 0 -100vw);
+}
+
 .boss-sprite {
-  width: 96px;
-  height: 96px;
-  padding: 6px;
-  border: var(--stroke) solid var(--ui-border);
-  background: var(--bg-inset);
   animation: bob 1.2s steps(2) infinite alternate;
 }
 
-.boss-sprite.lunge {
-  border-color: var(--ui-danger);
-  animation: lunge .4s steps(4);
+.boss-sprite.weak {
+  animation-duration: .45s;
 }
 
-.boss-sprite.hit {
-  animation: hit .3s steps(3);
+.boss-sprite.hurt {
+  animation: hurt .5s steps(1, end);
+}
+
+.boss-sprite.lunge {
+  animation: pounce .5s steps(5);
+}
+
+.boss-sprite.fainted {
+  animation: faint .8s steps(8) forwards;
+}
+
+.entering .foe-spot .sprite-clip {
+  animation: enter-foe .6s steps(6);
 }
 
 .boss-taunt {
   position: relative;
-  display: inline-block;
-  margin: 0 0 10px;
+  z-index: 3;
+  justify-self: center;
+  max-width: 100%;
+  margin: 0;
   color: var(--text-muted);
   font-size: 22px;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .boss-taunt.speaking {
@@ -813,18 +913,225 @@ body:has(#game.active) .corner {
   animation: speak .15s steps(3);
 }
 
-/* Speech-bubble tail: a square pixel notch pointing at the monster. */
+/* Speech-bubble tail: a square pixel notch pointing down at the monster. */
 .boss-taunt.speaking::before {
   content: "";
   position: absolute;
-  left: -11px;
-  top: 50%;
+  left: 50%;
+  bottom: -11px;
   width: 8px;
   height: 8px;
-  margin-top: -4px;
+  margin-left: -4px;
   border: var(--stroke) solid var(--shadow-hard);
-  border-right: 0;
+  border-top: 0;
   background: var(--text-main);
+}
+
+.status-panel {
+  position: relative;
+  z-index: 3;
+  padding: 8px 12px 6px;
+  border: var(--stroke) solid var(--ui-border);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: var(--drop);
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* A long team name pushes the hearts onto their own line. */
+.team-panel .panel-title {
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.panel-title strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-accent-light);
+  font: 20px var(--font-display);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.panel-title span {
+  color: var(--text-muted);
+  font-size: 22px;
+}
+
+.hp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hp-row b {
+  padding: 0 4px;
+  background: var(--ui-accent);
+  color: var(--text-on-accent);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.hp-bar {
+  --hp: #7fb34f;
+  flex: 1;
+  height: 14px;
+  padding: 2px;
+  border: 2px solid var(--ui-border);
+  background: var(--bg-inset);
+}
+
+.hp-bar.mid {
+  --hp: var(--ui-accent);
+}
+
+.hp-bar.low {
+  --hp: var(--ui-danger);
+}
+
+.hp-bar div {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(color-mix(in srgb, var(--hp), #fff 35%) 0 35%, var(--hp) 35%);
+  transition: width .4s steps(8);
+}
+
+.foe-panel small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 17px;
+  text-align: right;
+}
+
+/* The move to do right now, big enough to read from across the room. */
+.move-box {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border: var(--stroke) solid var(--ui-accent);
+  background: var(--bg-inset);
+  box-shadow: var(--drop);
+}
+
+.move-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.move-row span {
+  flex: none;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 17px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.move-row span.p1 {
+  background: var(--ui-accent);
+  color: var(--text-on-accent);
+}
+
+.move-row span.p2 {
+  background: var(--ui-alt);
+  color: var(--text-on-accent);
+}
+
+.move-row strong {
+  overflow: hidden;
+  color: var(--ui-accent-light);
+  font: clamp(26px, 3vw, 40px)/1.05 var(--font-display);
+  text-overflow: ellipsis;
+  text-shadow: var(--drop);
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: callout .3s steps(3);
+}
+
+.move-row em {
+  flex: none;
+  padding: 0 6px;
+  border: 2px solid #9fdcff;
+  color: #9fdcff;
+  font-style: normal;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  animation: blink .5s steps(2) infinite;
+}
+
+.team-combo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  letter-spacing: .06em;
+}
+
+.team-combo strong {
+  color: var(--ui-accent-light);
+  font: 20px var(--font-display);
+}
+
+.team-combo small {
+  color: var(--text-muted);
+  font: 17px var(--font-body);
+}
+
+.team-panel .hearts svg {
+  width: 21px;
+  height: 18px;
+}
+
+.battle-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.fx {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+svg.fx {
+  display: block;
+  width: calc(var(--px) * 9);
+  filter: drop-shadow(var(--px) var(--px) 0 var(--shadow-hard));
+}
+
+.fx.burst {
+  animation: burst .35s steps(3) both;
+}
+
+.fx.bolt {
+  animation: bolt .5s steps(6) both;
+}
+
+.fx.damage {
+  color: var(--ui-accent-light);
+  font: 34px/1 var(--font-body);
+  text-shadow: 2px 2px 0 var(--shadow-hard);
+  animation: float .8s steps(6) forwards;
 }
 
 .target-label {
@@ -861,17 +1168,6 @@ body:has(#game.active) .corner {
   height: 100%;
   background: repeating-linear-gradient(90deg, var(--ui-accent) 0 10px, var(--ui-accent-light) 10px 12px);
   transition: width .2s steps(4);
-}
-
-.boss-hp div {
-  background: repeating-linear-gradient(90deg, var(--ui-danger) 0 10px, var(--ui-alt) 10px 12px);
-}
-
-.arena-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
 }
 
 .hearts {
@@ -970,10 +1266,6 @@ body:has(#game.active) .corner {
 .stage-grid.multi {
   grid-template-columns: repeat(2, 1fr);
   justify-items: stretch;
-}
-
-.stage-grid.many {
-  grid-template-columns: repeat(3, 1fr);
 }
 
 .stage {
@@ -1082,6 +1374,7 @@ body:has(#game.active) .corner {
   left: 25%;
   background: var(--ui-accent);
   color: var(--text-on-accent);
+  outline: 3px solid var(--shadow-hard);
 }
 
 .player-label#p2-label {
@@ -1660,23 +1953,10 @@ body:has(#game.active) .corner {
   }
 }
 
-@keyframes speak {
-  from {
-    transform: scale(.8);
-    transform-origin: left center;
-  }
-}
-
 @keyframes callout {
   from {
     opacity: 0;
     transform: scale(1.1);
-  }
-}
-
-@keyframes lunge {
-  40% {
-    transform: translateX(10px) scale(1.15);
   }
 }
 
@@ -1686,13 +1966,57 @@ body:has(#game.active) .corner {
   }
 }
 
-@keyframes hit {
-  33% {
-    transform: translateX(-6px);
-    filter: brightness(3);
+/* Taking a hit: blink on and off, as monsters do. */
+@keyframes hurt {
+  0%, 40%, 80% { opacity: 0; }
+  20%, 60%, 100% { opacity: 1; }
+}
+
+/* The boss lunges down toward the players. */
+@keyframes pounce {
+  40% {
+    transform: translate(calc(var(--px) * -12), calc(var(--px) * 4));
   }
-  66% {
-    transform: translateX(6px);
+}
+
+@keyframes faint {
+  to {
+    transform: translateY(105%);
+  }
+}
+
+@keyframes enter-foe {
+  from {
+    transform: translateX(-70vw);
+  }
+}
+
+@keyframes burst {
+  from {
+    transform: scale(.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* An attack flies from the boss at the team's panel. */
+@keyframes bolt {
+  from {
+    top: 40%;
+    left: 48%;
+  }
+  to {
+    top: 82%;
+    left: 78%;
+  }
+}
+
+@keyframes speak {
+  from {
+    transform: scale(.8);
+    transform-origin: bottom center;
   }
 }
 
@@ -1777,31 +2101,33 @@ body:has(#game.active) .corner {
   }
 
   .arena {
-    grid-template-columns: auto 1fr;
-    gap: 10px 14px;
-    padding: 10px;
+    --px: 4px;
   }
 
-  .boss-sprite {
-    width: 64px;
-    height: 64px;
-    padding: 4px;
+  .move-row strong {
+    font-size: 28px;
+  }
+
+  .status-panel {
+    padding: 4px 8px 2px;
+    font-size: 15px;
+  }
+
+  .panel-title strong {
+    font-size: 14px;
+  }
+
+  .panel-title span {
+    font-size: 17px;
+  }
+
+  .team-panel .hearts svg {
+    width: 14px;
+    height: 12px;
   }
 
   .boss-taunt {
     font-size: 19px;
-  }
-
-  .arena-side {
-    grid-column: 1 / -1;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .hearts svg {
-    width: 22px;
-    height: 19px;
   }
 
   .hud-number strong {
@@ -1817,10 +2143,6 @@ body:has(#game.active) .corner {
   .stage {
     min-height: 220px;
     border-width: 8px;
-  }
-
-  .stage-grid.many {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .tile-bar {
