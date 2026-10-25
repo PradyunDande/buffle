@@ -44,7 +44,8 @@ export const DIFFICULTIES = {
 export const POSES = {
   tPose: { name: "T-Pose", hint: "Arms straight out to the sides" },
   flex: { name: "Flex", hint: "Elbows out at shoulder height, fists up" },
-  headTouch: { name: "Hands on Head", hint: "Both hands on top of your head" }
+  headTouch: { name: "Hands on Head", hint: "Both hands on top of your head" },
+  sixSeven: { name: "6-7", hint: "Palms up in front of you, bounce your hands up and down in turn" }
 };
 export const POSE_HOLD = 600, POSE_TIMEOUT = 12000;
 // What the monster says when it freezes someone: `{name}` is the player, `{pose}` the pose.

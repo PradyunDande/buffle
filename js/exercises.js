@@ -326,8 +326,9 @@ export function processPunch(index, landmarks, world, aspect, now) {
 // symmetric, so the mirrored camera doesn't matter.
 // Poses are judged from the shoulders and elbows, since a floor camera often cuts
 // off the head of someone standing, and any hand raised above it. The wrists are
-// checked only when the camera can see them.
-export function holdsPose(pose, landmarks, aspect) {
+// checked only when the camera can see them, except for the 6-7, which is all hands.
+// `t` is the player's tracker and `now` the frame time, for poses that move.
+export function holdsPose(pose, landmarks, aspect, t, now) {
   const [ls, rs, le, re] = [11, 12, 13, 14].map((i) => joint(landmarks, i));
   if (!ls || !rs || !le || !re) return false;
   const lw = joint(landmarks, 15), rw = joint(landmarks, 16), wrists = lw && rw;
@@ -348,6 +349,19 @@ export function holdsPose(pose, landmarks, aspect) {
     // Elbows raised and spread wide, hands (if seen) meeting over the middle.
     case "headTouch": return lift(le, ls) > .15 && lift(re, rs) > .15 && lift(le, ls) < .65 + slack && lift(re, rs) < .65 + slack
       && apart(le, re) > 1.5 - slack && (!wrists || (apart(lw, rw) < apart(le, re) * .7 && above(lw, ls, .3) && above(rw, rs, .3)));
+    // 6-7: elbows low by the sides and the hands bouncing in turn below the shoulders.
+    // It counts while the hands have swapped which is higher at least twice in 1.5 s.
+    case "sixSeven": {
+      if (!wrists || lift(le, ls) > .1 || lift(re, rs) > .1 || apart(le, re) > 2.2 + slack) return false;
+      if (above(lw, ls, .1) || above(rw, rs, .1)) return false;
+      const swing = Math.max(.08, .2 - slack * .5), gap = (lw.y - rw.y) / width;
+      const seesaw = t.seesaw ||= { side: 0, flips: [] };
+      const side = gap > swing ? 1 : gap < -swing ? -1 : seesaw.side;
+      if (side && seesaw.side && side !== seesaw.side) seesaw.flips.push(now);
+      seesaw.side = side;
+      seesaw.flips = seesaw.flips.filter((at) => now - at < 1500);
+      return seesaw.flips.length >= 2;
+    }
     default: return false;
   }
 }

@@ -41,7 +41,7 @@ export function newTracker() {
   // `exercise` is this player's current move.
   // While `pose` is set the player is frozen until they strike it (Strike a Pose).
   return { x: null, y: null, seenAt: 0, phase: "UP", angle: null, exercise: null, switchAt: 0,
-    pose: null, poseAt: Infinity, poseUntil: 0, poseHeld: 0, poseSent: false,
+    pose: null, poseAt: Infinity, poseUntil: 0, poseHeld: 0, poseSent: false, seesaw: null,
     belowFrame: false, belowSince: 0, armSeenAt: -Infinity, lastShoulderY: 0, lastStraight: true,
     visibility: 0, minAngle: 180, cleanJack: false, straight: false,
     holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, topThigh: null, topReach: null, topShoulderY: null, lowShoulderY: 0, arms: newArms(),
@@ -55,6 +55,7 @@ export function resetMotion(t) {
   t.method = null; t.topY = t.topThigh = null; t.topReach = t.topShoulderY = null; t.arms = newArms();
   // A pose hold must be continuous: losing sight of the player starts it over.
   t.poseHeld = 0;
+  t.seesaw = null;
   t.belowFrame = false;
 }
 
