@@ -1,11 +1,11 @@
 /* Buffle: a single-page, client-side fairy-tale exercise brawler. Wires up the page. */
 
 import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
-import { beginCountdown, recordRep, setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
+import { setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
 import { cleanCode } from "./network.js";
 import { cancelMatch, copyInvite, enterLobby, findMatch, hostStart, leaveParty, openParty } from "./party.js";
-import { isGuest, online, saveSettings, settings, solo, state } from "./state.js";
-import { $, show, toast } from "./ui.js";
+import { isGuest, online, saveSettings, settings, state } from "./state.js";
+import { $, GEAR, pixelArt, QUESTION, show, toast } from "./ui.js";
 import { toggleMic } from "./voice.js";
 
 // Each mode first asks whether to play locally or online.
@@ -32,6 +32,8 @@ for (const [id, key] of [["p1-name", "name"], ["p2-name", "name2"]]) {
   });
 }
 $("start-fight").addEventListener("click", () => { state.mode = settings.players === 2 ? "coop" : "solo"; startFight(); });
+$("how-button").append(pixelArt(QUESTION));
+$("settings-button").append(pixelArt(GEAR));
 $("how-button").addEventListener("click", () => show("how"));
 $("settings-button").addEventListener("click", () => show("settings"));
 function goToMenu() {
@@ -71,26 +73,6 @@ $("retry-button").addEventListener("click", () => {
   $("camera-placeholder").textContent = "Preparing the camera…";
   prepareCamera();
 });
-function useHotkeys() {
-  if (online()) {
-    // Online hotkeys always work; without a camera this just clears the error.
-    if (!state.stream) {
-      stopMedia(); state.keyboardOnly = true;
-      $("camera-placeholder").hidden = false;
-      $("camera-placeholder").textContent = "Hotkey mode — press 1 or Q";
-    }
-    $("game-error").hidden = true;
-    return;
-  }
-  if (state.status !== "loading") return;
-  stopMedia(); state.keyboardOnly = true;
-  $("game-error").hidden = true;
-  $("camera-placeholder").textContent = "Hotkey mode — press 1 / 2 or Q / W";
-  $("waiting").hidden = true;
-  beginCountdown(state.session);
-}
-$("keyboard-button").addEventListener("click", useHotkeys);
-$("keyboard-shortcut").addEventListener("click", useHotkeys);
 
 for (const [id, key] of [["sound-toggle","sound"],["effects-toggle","effects"],["debug-toggle","debug"]]) {
   $(id).checked = settings[key];
@@ -107,12 +89,4 @@ $("swap-button").addEventListener("click", () => {
   state.scores.reverse();
   saveSettings(); positionLabels();
   toast(`P1 / P2 ${settings.swapped ? "swapped" : "restored"}`);
-});
-window.addEventListener("keydown", (event) => {
-  if (state.screen !== "game" || state.status !== "playing" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
-  const key = event.key.toLowerCase();
-  const match = { "1": [0,"clean",1], "2": [1,"clean",1], q: [0,"ok",.5], w: [1,"ok",.5] }[key];
-  if (!match || (solo() && match[0] === 1)) return;
-  event.preventDefault();
-  recordRep(...match, false);
 });

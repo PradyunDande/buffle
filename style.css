@@ -159,6 +159,48 @@ h3 {
 
 
 
+/* How to Play and Settings live in the top corner, out of the way during a fight. */
+.corner {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 20px;
+}
+
+body:has(#game.active) .corner {
+  display: none;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: var(--stroke) solid var(--ui-border);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: var(--drop);
+  transition: transform .08s steps(2), box-shadow .08s steps(2);
+}
+
+.icon-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.icon-button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--drop-lift);
+  border-color: var(--ui-accent);
+  color: var(--ui-accent-light);
+}
+
+.icon-button:active {
+  transform: translate(var(--offset), var(--offset));
+  box-shadow: none;
+}
+
 .screen {
   display: none;
   animation: appear .2s steps(4);
@@ -254,27 +296,7 @@ h3 {
   color: var(--ui-accent-light);
 }
 
-.hotkey-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ui-accent);
-  font-size: 18px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 
-kbd {
-  display: inline-block;
-  min-width: 1.4em;
-  padding: 0 5px;
-  border: 2px solid var(--ui-border);
-  background: var(--bg-base);
-  color: var(--text-main);
-  font: 18px var(--font-body);
-  text-align: center;
-  box-shadow: 2px 2px 0 var(--shadow-hard);
-}
 
 /* ==========================================================================
    Menu
@@ -294,10 +316,9 @@ kbd {
 
 
 .menu-grid {
-  max-width: 520px;
+  max-width: 420px;
   margin: auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
@@ -307,26 +328,6 @@ kbd {
   white-space: nowrap;
 }
 
-.menu-links {
-  display: flex;
-  justify-content: center;
-  gap: 32px;
-  margin-top: 28px;
-}
-
-.text-link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-muted);
-  font-size: 22px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
-
-.text-link:hover {
-  color: var(--ui-accent-light);
-}
 
 
 /* ==========================================================================
@@ -1481,7 +1482,6 @@ kbd {
   }
 
   .menu-grid {
-    grid-template-columns: 1fr;
     gap: 12px;
   }
 

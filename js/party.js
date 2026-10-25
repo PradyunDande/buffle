@@ -35,7 +35,7 @@ export async function openParty(join) {
   if (join && code.length !== 5) { toast("Enter the 5-character party code."); return; }
   stopRound();
   const party = newParty();
-  Object.assign(state, { mode: "party", party, roster: [], difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal", keyboardOnly: false });
+  Object.assign(state, { mode: "party", party, roster: [], difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
   setRemoteBusy(true);
   try {
     if (join) await party.join(code, settings.name);
@@ -63,7 +63,7 @@ export async function findMatch() {
   saveSettings();
   stopRound();
   const party = newParty();
-  Object.assign(state, { mode: "duel", party, roster: [], difficulty: "hard", keyboardOnly: false, searching: true });
+  Object.assign(state, { mode: "duel", party, roster: [], difficulty: "hard", searching: true });
   setMatchStatus("Searching for an opponent…");
   try {
     await party.matchmake(settings.name, () => { if (state.party === party) setMatchStatus("Waiting for an opponent…"); });
@@ -92,7 +92,7 @@ export function cancelMatch() {
 }
 // Back to local play: this player's own difficulty, no roster or remote cameras.
 function resetOnline(mode) {
-  Object.assign(state, { mode, party: null, roster: [], partyReps: [], keyboardOnly: false,
+  Object.assign(state, { mode, party: null, roster: [], partyReps: [],
     difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
   state.remoteStreams.clear();
   // After `party` is cleared, so the mic button sees play is no longer online.
@@ -225,7 +225,7 @@ export function enterLobby() {
   startVoice();
   updateMicButton();
   if (state.stream) ensurePoseLoop();
-  else if (!state.keyboardOnly && !state.cameraBusy && $("game-error").hidden) {
+  else if (!state.cameraBusy && $("game-error").hidden) {
     $("camera-placeholder").hidden = false;
     $("camera-placeholder").textContent = "Preparing the camera…";
     prepareCamera();

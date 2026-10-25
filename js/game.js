@@ -182,7 +182,7 @@ export function resetRound() {
   $("waiting").hidden = true;
   if (!state.stream) {
     $("camera-placeholder").hidden = false;
-    $("camera-placeholder").textContent = state.keyboardOnly ? "Hotkey mode — press 1 or Q" : "Preparing the camera…";
+    $("camera-placeholder").textContent = "Preparing the camera…";
   }
   $("game-error").hidden = true;
   $("countdown").hidden = true;
@@ -265,7 +265,6 @@ export function startGame() {
   resetRound();
   show("game");
   state.status = "loading";
-  state.keyboardOnly = false;
   prepareCamera();
 }
 

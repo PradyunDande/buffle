@@ -49,10 +49,6 @@ Remote play uses [PeerJS](https://peerjs.com/) (loaded from a CDN) to connect br
 - Players who join mid-fight wait in the lobby until the next fight. If the host leaves, the party ends.
 - **Matchmaking** has no server of its own. Six well-known PeerJS ids (`buffle-match-hard-0` to `-5`) act as waiting rooms: a searcher first tries to join whoever is waiting in one, and if nobody is, takes the first free room and waits. If two people search at the same instant and both end up waiting, the one in the later room keeps checking earlier rooms and moves when it finds someone. Whoever waited becomes the host. Six rooms means at most six players can be waiting at once; anyone beyond that is told to try again.
 
-## Test controls
-
-During a fight, press **1** for a clean P1 rep, **2** for a clean P2 rep, **Q** for a P1 half rep, and **W** for a P2 half rep. Press 1 and 2 within 700ms to trigger a SYNC bonus. If the camera or model cannot start, choose **Use Hotkeys** to play a full fight.
-
 ## Boss art
 
 Each boss in `BOSSES` ([js/config.js](js/config.js)) has a 16×16 pixel map drawn on a canvas. To use generated pixel art instead, add the image (e.g. `assets/bosses/wolf.png`) and set that boss's `image` field to its path. Square images with transparent backgrounds look best.

@@ -77,7 +77,10 @@ export function confetti() {
 // Pixel-art icons drawn as crisp SVG in the current text color: "X" cells are filled.
 const HEART = [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."];
 const BAT = ["X.........X", "XX..X.X..XX", "XXX.XXX.XXX", "XXXXXXXXXXX", ".XXXXXXXXX.", "..XX...XX..", "...X...X..."];
-function pixelArt(rows, className = "") {
+export const QUESTION = [".XXXXX.", "XX...XX", ".....XX", "....XX.", "...XX..", "...XX..", ".......", "...XX..", "...XX.."];
+export const GEAR = ["....XXX....", ".XX.XXX.XX.", ".XXXXXXXXX.", "..XXXXXXX..", "XXXX...XXXX", "XXXX...XXXX", "XXXX...XXXX",
+  "..XXXXXXX..", ".XXXXXXXXX.", ".XX.XXX.XX.", "....XXX...."];
+export function pixelArt(rows, className = "") {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", `0 0 ${rows[0].length} ${rows.length}`);

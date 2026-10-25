@@ -62,7 +62,6 @@ export async function prepareCamera() {
     await loadModel();
     if (!current()) return;
     $("camera-placeholder").hidden = true;
-    state.keyboardOnly = false;
     state.lastVideoTime = -1;
     state.cameraBusy = false;
     ensurePoseLoop();
@@ -71,9 +70,9 @@ export async function prepareCamera() {
     if (!current()) return;
     const denied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
     $("error-title").textContent = denied ? "Camera permission denied" : (state.stream ? "Pose model failed to load" : "Camera unavailable");
-    $("error-text").textContent = denied ? "Allow camera access in your browser, then retry. You can also play using the test hotkeys." :
+    $("error-text").textContent = denied ? "Allow camera access in your browser, then retry." :
       state.stream ? "The pose model could not load. Check the connection to the model and CDN, then retry." :
-      `${error?.message || "The camera could not start."} You can play using the test hotkeys.`;
+      error?.message || "The camera could not start.";
     $("game-error").hidden = false;
     $("camera-placeholder").textContent = denied ? "Camera permission denied" : "Camera or model unavailable";
     stopMedia();
@@ -184,7 +183,7 @@ function poseLoop(now) {
         if (!entry) return;
         const t = state.trackers[index];
         t.x = entry.point.x; t.y = entry.point.y; t.seenAt = now;
-        // A missing teammate pauses camera scoring; hotkeys still work for testing.
+        // A missing teammate pauses camera scoring.
         // Each player is tracked on their own move, and not while switching to it.
         if (state.status !== "playing" || detected < needed || now < t.readyAt) return;
         if (t.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
@@ -199,7 +198,7 @@ function poseLoop(now) {
       state.lastFrameAt = now;
       updateDebug();
     } catch (error) {
-      // Stop repeated detection errors and let the player finish with hotkeys.
+      // Stop repeated detection errors; the player can retry the camera.
       $("error-title").textContent = "Pose tracking stopped";
       $("error-text").textContent = error?.message || "The pose tracker could not process the camera.";
       $("game-error").hidden = false;

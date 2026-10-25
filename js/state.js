@@ -8,7 +8,7 @@ export const state = {
   difficulty: Object.hasOwn(DIFFICULTIES, settings.difficulty) ? settings.difficulty : "normal",
   status: "idle", session: 0, stream: null, landmarker: null,
   modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, lobbyTimer: 0, alertTimer: 0,
-  lastVideoTime: -1, lastFrameAt: 0, fps: 0, keyboardOnly: false,
+  lastVideoTime: -1, lastFrameAt: 0, fps: 0,
   trackers: [newTracker(), newTracker()],
   combo: 0, bestCombo: 0, frenzyUntil: 0, cleanEvents: 0, repEvents: 0,
   lastEvents: [null, null], endAt: 0, duration: 0, lastTickAt: 0,
