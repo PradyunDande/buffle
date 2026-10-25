@@ -4,15 +4,23 @@
 
 ## Modes
 
-- **Story Mode** (solo): a four-chapter campaign. Defeat the Big Bad Wolf, the Bridge Troll, the Wicked Witch, and the Tower Dragon to save the kingdom. Each cleared chapter unlocks the next; progress is saved in the browser.
-- **Co-op Boss** (2 players, 1 camera): team up against any boss. Bosses have double health. Reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
-- **Remote Party** (up to 6 players, one device each): one player creates a party and shares its 5-letter code or invite link; the others join from their own devices. Everyone's camera appears in a grid, the host picks the boss, and boss HP is multiplied by the number of players.
+- **Boss Fight** (1–2 players, 1 camera): choose how many people are playing and a difficulty, and a random monster appears: the Big Bad Wolf, the Bridge Troll, the Wicked Witch, or the Tower Dragon (never the same one twice in a row). With two players, reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
+- **Remote Party** (up to 6 players, one device each): one player creates a party and shares its 5-letter code or invite link; the others join from their own devices. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP is multiplied by the number of players.
 - **1v1 Duel** (2 players, 1 camera): a 45-second tug-of-war on one exercise. Clean-rep streaks multiply your points. A 25-point lead wins by knockout.
 
 ## Boss fights
 
+Difficulty sets the fight; the monster only changes the look and lines.
+
+| Difficulty | Boss HP per player | Time | Boss attacks every | Move switches every | Moves |
+| --- | --- | --- | --- | --- | --- |
+| Easy | 24 | 90 s | 12 s | 14–20 s | squats, punches, jumping jacks |
+| Normal | 36 | 90 s | 10 s | 10–15 s | + push-ups |
+| Hard | 50 | 100 s | 8 s | 8–12 s | + planks |
+
 - Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. Push-ups are worth 1.5×, punches 0.5× (they come fast). A held plank deals damage every 1.2 seconds.
-- Bosses rotate exercises as their health drops (e.g. squats → punches → push-ups → jumping jacks). The game pauses for 3 seconds between phases (5 seconds before a plank) so players can change position.
+- The boss calls a random move from the difficulty's list for each player, on that player's own timer, so teammates can be on different moves at once. Each call comes as a line of dialog in the monster's speech bubble, using the player's name ("Hosty, drop and give me push-ups!"). Local players set names on the Boss Fight setup screen; remote players use their party name. Lines live in each boss's `lines` in `js/config.js`.
+- A player's reps pause for 3 seconds after a switch (5 before push-ups or a plank) so they can change position; everyone else keeps fighting. If every player is switching at once, the clock and the boss's attacks wait. The boss never calls a switch mid-attack.
 - Every 8–11 seconds the boss attacks. Land a rep within 2.5 seconds to parry for +2 damage, or lose one of your three hearts.
 - You lose if your hearts or the clock run out.
 
@@ -32,7 +40,7 @@ The first fight loads MediaPipe Tasks Vision and its lite pose model from the sp
 
 Remote play uses [PeerJS](https://peerjs.com/) (loaded from a CDN) to connect browsers directly over WebRTC. PeerJS's free public server only introduces players to each other; video and game events go player to player.
 
-- **Host-authoritative:** the host's browser runs the fight (boss HP, phases, attacks, timer) and sends the state to guests 10 times a second. Each guest runs pose detection on their own camera and sends only their reps.
+- **Host-authoritative:** the host's browser runs the fight (boss HP, each player's move, attacks, timer) and sends the state to guests 10 times a second. Each guest runs pose detection on their own camera and sends only their reps.
 - **Video:** every player sends their camera to every other player at 640×480, with no audio. That's fine for a few players; at 6 players each device uploads 5 streams.
 - **Hosting:** each player must load the game over HTTPS (or `localhost`) for camera access, so a party across devices needs the folder hosted somewhere public, such as GitHub Pages, Netlify, or an HTTPS tunnel like ngrok to your local server.
 - **Networks:** without a TURN server, some strict corporate or school networks block the direct connection. Phone hotspots and home Wi-Fi usually work.
@@ -54,9 +62,9 @@ The game is plain ES modules with no build step; `index.html` loads `js/main.js`
 | --- | --- |
 | `js/main.js` | Entry point: button, keyboard, and settings wiring |
 | `js/config.js` | Exercise names, scoring constants, and the boss roster |
-| `js/state.js` | Shared game state, saved settings and story progress, scoring helpers |
+| `js/state.js` | Shared game state, saved settings, scoring helpers |
 | `js/ui.js` | DOM helpers, sounds and effects, sprites, the in-fight HUD |
-| `js/game.js` | The fight loop: reps, boss phases and attacks, clock, results |
+| `js/game.js` | The fight loop: reps, the boss's move calls and attacks, clock, results |
 | `js/exercises.js` | Rep detection for squats, jumping jacks, push-ups, and planks |
 | `js/camera.js` | Camera, pose model, and the per-frame tracking loop |
 | `js/party.js` | Remote party gameplay: lobby, roster, host-to-guest sync, camera grid |

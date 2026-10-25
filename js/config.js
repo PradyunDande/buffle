@@ -14,33 +14,52 @@ export const TIPS = {
 export const REP_VALUE = { squats: 1, jacks: 1, pushups: 1.5, plank: 1, punches: .5 };
 // The shortest time between two camera reps from one player.
 export const REP_GAP = { punches: 200 };
+// How long a player's reps pause after the boss calls a new move; floor moves need longer.
+export const SWITCH_PAUSE = { plank: 5000, pushups: 5000 };
 export const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 export const points = { clean: 2, ok: 1, bad: 0.5 };
 export const feedback = { clean: "CLEAN", ok: "OK", bad: "SLOPPY" };
-export const ROMAN = ["I", "II", "III", "IV", "V", "VI"];
 export const HEARTS = 3, PARRY_WINDOW = 2500, PLANK_TICK = 1200, ROPE = 25, DUEL_TIME = 45000;
 
-// Each boss is a story chapter. Phases rotate exercises as its health drops.
+// Difficulty sets the fight: `hp` is per player, and the boss calls a random move
+// from `moves` for each player on their own timer of `switchEvery` [min, max] ms.
+export const DIFFICULTIES = {
+  easy: { name: "Easy", blurb: "Standing moves only, with slow switches.", hp: 24, time: 90, attackEvery: 12000,
+    switchEvery: [14000, 20000], moves: ["squats", "punches", "jacks"] },
+  normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 36, time: 90, attackEvery: 10000,
+    switchEvery: [10000, 15000], moves: ["squats", "punches", "jacks", "pushups"] },
+  hard: { name: "Hard", blurb: "Every move, planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 8000,
+    switchEvery: [8000, 12000], moves: ["squats", "punches", "jacks", "pushups", "plank"] }
+};
+
+// What a monster tells a player to do when it calls a new move, filling `{command}` in its lines.
+export const COMMANDS = {
+  squats: "start doing squats", jacks: "start doing jumping jacks", pushups: "drop and give me push-ups",
+  plank: "hold a plank", punches: "start throwing punches"
+};
+
+// Each fight draws one of these monsters at random; it sets the look and the lines.
+// `lines` are what it says when it calls a new move: `{name}` is the player.
 // Sprites are 16×16 pixel maps; set `image` to a PNG path to use generated art instead.
 export const BOSSES = [
   { id: "wolf", name: "The Big Bad Wolf", taunt: "I'll huff, and I'll puff…", attack: "The Wolf huffs and puffs",
-    story: "Reach Grandmother's cottage before the Wolf does.", victory: "Grandmother is safe. The forest path opens.",
-    phases: ["squats", "punches"], hp: 24, time: 75, attackEvery: 11000,
+    victory: "Grandmother is safe, and the forest path is clear.",
+    lines: ["{name}, {command}!", "Little pig {name}… {command}, or I'll blow your house down!", "Huff, puff! {name}, {command}!"],
     palette: { G: "#3b3f4a", g: "#7d8696", Y: "#f3c351", K: "#120d0a", W: "#f4ecdc", R: "#c2453a" },
     sprite: ["................","..GG........GG..",".GgG........GgG.",".GggG......GggG.",".GgggGGGGGGgggG.","..GggggggggggG..","..GgYYggggYYgG..","..GgYKggggKYgG..","..GggggggggggG..","...GgggWWgggG...","...GggWKKWggG...","....GgWWWWgG....","....GWRWWRWG....",".....GWWWWG.....","......GGGG......","................"] },
   { id: "troll", name: "The Bridge Troll", taunt: "None shall cross my bridge!", attack: "The Troll swings his club",
-    story: "Cross the old stone bridge into the enchanted wood.", victory: "The bridge is yours. The wood lies ahead.",
-    phases: ["punches", "jacks", "squats"], hp: 32, time: 90, attackEvery: 10000,
+    victory: "The bridge is yours to cross.",
+    lines: ["{name}, {command}!", "Troll toll! {name}, {command}!", "No crossing for you, {name}, until you {command}!"],
     palette: { H: "#2f4a24", g: "#6b9a45", E: "#557c37", K: "#120d0a", W: "#f4ecdc", N: "#4c7232", T: "#efe3c2", b: "#6b4428" },
     sprite: ["................","....HHHHHHHH....","...HggggggggH...","..HggggggggggH..",".EHgKKggggKKgHE.",".EHgKWggggWKgHE.","..HggggNNggggH..","..HgggNNNNgggH..","..HgTggggggTgH..","..HgTTTTTTTTgH..","...HggggggggH...","..HHHggggggHHH..",".HgggHHHHHHgggH.",".Hgg.HbbbbH.ggH.",".HH..HbbbbH..HH.","................"] },
   { id: "witch", name: "The Wicked Witch", taunt: "Into the oven with you!", attack: "The Witch hurls a curse",
-    story: "Free Hansel and Gretel from the gingerbread house.", victory: "The children are free. The tower looms.",
-    phases: ["jacks", "pushups", "plank"], hp: 40, time: 90, attackEvery: 9000,
+    victory: "Hansel and Gretel are free.",
+    lines: ["{name}, {command}!", "Hee hee hee! {name}, {command}!", "Into the cauldron unless you {command}, {name}!"],
     palette: { P: "#4b2a63", Y: "#e8bb59", k: "#1a1210", f: "#88b04b", K: "#120d0a", N: "#5f7f2f", R: "#8e2b2b" },
     sprite: [".......PP.......","......PPPP......",".....PPPPPP.....","....PPPPPPPP....","..PPPPPPPPPPPP..",".PPPPYYYYYYPPPP.","....kffffffk....","...kffKffKffk...","...kfffNNfffk...","...kffffNfffk...","....kfRRRRfk....",".....kffffk.....","....PPPPPPPP....","...PPPPPPPPPP...","..PPPPPPPPPPPP..","................"] },
   { id: "dragon", name: "The Tower Dragon", taunt: "The kingdom burns tonight.", attack: "The Dragon breathes fire",
-    story: "Storm the tower and save the kingdom.", victory: "The kingdom is saved.",
-    phases: ["squats", "punches", "pushups", "jacks"], hp: 50, time: 120, attackEvery: 8000,
+    victory: "The kingdom is saved.",
+    lines: ["{name}, {command}!", "Kneel, {name}! Now {command}!", "Hear me, {name}: {command}, or burn!"],
     palette: { H: "#efe3c2", R: "#b8382c", r: "#7e2219", Y: "#f3c351", K: "#120d0a", W: "#6a3a7a", O: "#f39b2f" },
     sprite: ["..H..........H..","..HH........HH..","...RR......RR...","...RRRRRRRRRR...","..RRRRRRRRRRRR..","..RRYKRRRRKYRR..",".WRRRRRRRRRRRRW.","WWRRRRRRRRRRRRWW","WW.RRRrrrrRRR.WW","W..RRrHrrHrRR..W","...RRrrrrrrRR...","....RRrOOrRR....","....RRROORRR....",".....RRRRRR.....","......RRRR......","................"] }
 ];

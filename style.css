@@ -233,7 +233,7 @@ h3 {
   box-shadow:0 2px 0 #120b08
 }
 
-.button:focus-visible,.exercise-card:focus-visible,.boss-card:focus-visible,.back:focus-visible,.brand:focus-visible {
+.button:focus-visible,.exercise-card:focus-visible,.choice:focus-visible,.back:focus-visible,.brand:focus-visible {
   outline:3px solid white;
   outline-offset:3px
 }
@@ -1051,24 +1051,36 @@ kbd {
 }
 
 
-.panel.wide {
-  max-width:1040px
+.menu-grid .wide {
+  grid-column:1 / -1
 }
 
-.boss-grid {
+.setup-label {
+  margin:26px 0 10px;
+  color:var(--gold);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.2em;
+  text-transform:uppercase
+}
+
+.choice-row {
   display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:14px;
-  margin-top:26px
+  grid-template-columns:repeat(2,1fr);
+  gap:12px
 }
 
-.boss-card {
+.difficulty-row {
+  grid-template-columns:repeat(3,1fr)
+}
+
+.choice {
   display:flex;
   flex-direction:column;
   align-items:flex-start;
-  gap:8px;
+  gap:6px;
   text-align:left;
-  padding:18px;
+  padding:16px 18px;
   border:1px solid #a47747;
   background:linear-gradient(#563620,#312015);
   color:var(--ink);
@@ -1077,45 +1089,45 @@ kbd {
   transition:transform .16s,filter .16s,box-shadow .16s
 }
 
-.boss-card:hover:not(:disabled) {
+.choice:hover {
   transform:translateY(-3px);
   filter:brightness(1.1);
   box-shadow:0 8px 0 #120b08
 }
 
-.boss-card:disabled {
-  cursor:not-allowed;
-  filter:grayscale(.9) brightness(.6)
+.choice.selected {
+  border-color:var(--gold);
+  background:linear-gradient(#7a5230,#4a2f1c);
+  box-shadow:0 5px 0 #120b08,0 0 0 2px var(--gold)
 }
 
-.boss-card.cleared {
-  border-color:var(--gold)
-}
-
-.boss-card .sprite {
-  width:96px;
-  height:96px;
-  align-self:center;
-  margin-bottom:4px
-}
-
-.boss-chapter {
-  color:var(--gold);
-  font-size:10px;
-  font-weight:900;
-  letter-spacing:.14em
-}
-
-.boss-card strong {
-  font:22px var(--display);
+.choice strong {
+  font:26px var(--display);
   color:var(--gold-light)
 }
 
-.boss-story {
+.choice span {
   font-size:13px;
   color:var(--muted);
-  line-height:1.4;
-  flex:1
+  line-height:1.4
+}
+
+.choice small {
+  font-size:11px;
+  font-weight:900;
+  color:var(--gold)
+}
+
+#start-fight {
+  display:block;
+  width:100%;
+  margin-top:26px
+}
+
+.setup-note {
+  margin:14px 0 0;
+  text-align:center;
+  font-size:13px
 }
 
 .chips {
@@ -1161,35 +1173,43 @@ kbd {
 }
 
 .boss-taunt {
+  position:relative;
   margin:0 0 8px;
   font:17px var(--display);
   color:var(--muted)
 }
 
+.boss-taunt.speaking {
+  display:inline-block;
+  padding:6px 12px;
+  border-radius:10px;
+  background:#f8e9c8;
+  color:#2b1a0d;
+  font-weight:700;
+  animation:speak .25s ease-out
+}
+
+.boss-taunt.speaking::before {
+  content:"";
+  position:absolute;
+  left:-8px;
+  top:50%;
+  transform:translateY(-50%);
+  border:8px solid transparent;
+  border-left:0;
+  border-right-color:#f8e9c8
+}
+
+.name-row {
+  margin-top:12px
+}
+
+.name-row .field {
+  margin:0
+}
+
 .boss-hp div {
   background:linear-gradient(90deg,#7e2219,#d4563b)
-}
-
-.phase-pips {
-  display:flex;
-  gap:6px;
-  margin-top:8px
-}
-
-.phase-pips span {
-  width:26px;
-  height:6px;
-  border-radius:3px;
-  background:#1c110d;
-  border:1px solid #8a6b49
-}
-
-.phase-pips span.current {
-  background:var(--gold)
-}
-
-.phase-pips span.done {
-  background:#6b5235
 }
 
 .arena-side {
@@ -1372,7 +1392,7 @@ kbd {
 
 .boss-picker {
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(3,1fr);
   gap:8px;
   margin:4px 0 14px
 }
@@ -1467,6 +1487,14 @@ kbd {
   bottom:40px
 }
 
+@keyframes speak {
+  from {
+    opacity:0;
+    transform:scale(.85);
+    transform-origin:left center
+  }
+}
+
 @keyframes bob {
   to {
     transform:translateY(-5px)
@@ -1484,27 +1512,14 @@ kbd {
 }
 
 @media(max-width:900px) {
-  .boss-grid,.exercise-grid,.boss-picker {
+  .exercise-grid {
     grid-template-columns:repeat(2,1fr)
   }
 }
 
 @media(max-width:700px) {
-  .boss-grid {
+  .difficulty-row {
     grid-template-columns:1fr
-  }
-  .boss-card {
-    display:grid;
-    grid-template-columns:64px 1fr;
-    column-gap:14px;
-    row-gap:4px;
-    align-items:center
-  }
-  .boss-card .sprite {
-    grid-row:span 4;
-    width:64px;
-    height:64px;
-    margin:0
   }
   .exercise-grid {
     grid-template-columns:1fr
@@ -1553,7 +1568,7 @@ kbd {
     font-size:32px
   }
   .boss-picker {
-    grid-template-columns:1fr 1fr
+    grid-template-columns:1fr
   }
   .stage-grid.many {
     grid-template-columns:repeat(2,1fr)

@@ -1,8 +1,8 @@
 /* DOM helpers, sound and visual effects, sprites, and the in-fight HUD. */
 
-import { HEARTS, NAMES } from "./config.js";
+import { HEARTS, NAMES, TIPS } from "./config.js";
 import { tileFor, updateTileNames } from "./party.js";
-import { boss, comboMultiplier, isFrenzy, isHost, number, rope, scoreText, settings, state } from "./state.js";
+import { comboMultiplier, isFrenzy, isHost, localTrackers, number, rope, scoreText, settings, state } from "./state.js";
 
 export const $ = (id) => document.getElementById(id);
 
@@ -19,7 +19,7 @@ export function toast(message) {
   state.toastTimer = setTimeout(() => { box.hidden = true; }, 2800);
 }
 // An alert with no duration stays up until replaced or cleared.
-function showAlert(text, kind, ms = 0) {
+export function showAlert(text, kind, ms = 0) {
   const box = $("alert-banner");
   box.textContent = text;
   box.className = `alert-banner ${kind}`;
@@ -97,7 +97,7 @@ export function floatText(index, text, className = "") {
   setTimeout(() => item.remove(), 1250);
 }
 // Game effects run here and, on a party host, on every guest's screen too.
-export const EFFECTS = { floatText, showAlert, clearAlert, confetti, flashAndShake, sound };
+export const EFFECTS = { floatText, showAlert, clearAlert, confetti, flashAndShake, sound, bossSay };
 export function fx(name, ...args) {
   EFFECTS[name](...args);
   if (isHost()) state.party.broadcast({ t: "fx", name, args });
@@ -129,11 +129,9 @@ export function updateHud() {
     $("p2-points").textContent = number(scoreText(state.scores[1]));
     $("rope-marker").style.left = `${50 - rope() * 50}%`;
   } else {
-    const phases = boss().phases;
     $("boss-hp-fill").style.width = `${state.bossHp / state.bossMax * 100}%`;
     $("boss-hp-label").textContent = `${Math.ceil(state.bossHp)} / ${state.bossMax} HP`;
-    $("phase-label").textContent = `PHASE ${state.phase + 1} / ${phases.length} · ${NAMES[state.exercise].toUpperCase()}`;
-    $("phase-pips").querySelectorAll("span").forEach((pip, i) => { pip.className = i < state.phase ? "done" : i === state.phase ? "current" : ""; });
+    $("move-label").textContent = moveLabel();
     $("hearts").textContent = "♥".repeat(state.hearts) + "♡".repeat(HEARTS - state.hearts);
     $("combo-value").innerHTML = `${state.combo} <small>×${comboMultiplier().toFixed(1)}</small>`;
     $("boss-sprite").classList.toggle("winding", Boolean(state.attack));
@@ -144,6 +142,44 @@ export function updateHud() {
     $("p2-reps").textContent = number(state.trackers[1].reps);
   }
   $("frenzy-banner").hidden = duel || !isFrenzy();
+}
+
+// The HUD names each local player's move, and "GET READY" while they switch.
+function moveLabel() {
+  const now = performance.now();
+  const moves = localTrackers().map((t) => `${t.exercise ? NAMES[t.exercise].toUpperCase() : "—"}${now < t.readyAt ? " · GET READY" : ""}`);
+  return moves.length === 1 ? `${state.mode === "party" ? "YOUR MOVE" : "MOVE"}: ${moves[0]}` : moves.map((move, i) => `P${i + 1}: ${move}`).join("  ·  ");
+}
+export function updateTip() {
+  const moves = [...new Set(localTrackers().map((t) => t.exercise).filter(Boolean))];
+  $("pose-tip").textContent = moves.length === 1 ? TIPS[moves[0]]
+    : moves.length ? "Each player does the move the boss called for them." : "Keep your upper body in frame.";
+}
+
+// The monster's speech bubble shows one line at a time, then returns to its taunt.
+// Only the latest few lines wait their turn, so a burst of switches never lags far behind.
+const speech = { queue: [], timer: 0 };
+export function bossSay(text) {
+  speech.queue.push(String(text));
+  if (speech.queue.length > 3) speech.queue.shift();
+  if (!speech.timer) nextLine();
+}
+function nextLine() {
+  const box = $("boss-taunt");
+  const line = speech.queue.shift();
+  box.classList.remove("speaking");
+  if (line === undefined) { speech.timer = 0; box.textContent = box.dataset.taunt || ""; return; }
+  void box.offsetWidth;
+  box.textContent = line;
+  box.classList.add("speaking");
+  speech.timer = setTimeout(nextLine, 3500);
+}
+export function resetSpeech(taunt) {
+  clearTimeout(speech.timer);
+  speech.queue = [];
+  speech.timer = 0;
+  $("boss-taunt").dataset.taunt = `“${taunt}”`;
+  nextLine();
 }
 
 export function setResults(title, message, rating, ratingClass, stats) {

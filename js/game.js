@@ -1,16 +1,16 @@
-/* The fight loop: scoring reps, boss phases and attacks, the clock, and results. */
+/* The fight loop: scoring reps, boss move calls and attacks, the clock, and results. */
 
 import { positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, DUEL_TIME, feedback, HEARTS, NAMES, PARRY_WINDOW, points, REP_GAP, REP_VALUE, ROMAN, TIPS } from "./config.js";
+import { BOSSES, COMMANDS, DIFFICULTIES, DUEL_TIME, feedback, HEARTS, NAMES, PARRY_WINDOW, points, REP_GAP, REP_VALUE, SWITCH_PAUSE } from "./config.js";
 import { broadcastState } from "./party.js";
-import { boss, comboMultiplier, isFrenzy, isGuest, isHost, newTracker, number, playerCount, progress, resetMotion, rope, saveProgress, scoreText, solo, state, streakMultiplier, teamMode } from "./state.js";
-import { $, clearAlert, confetti, flashAndShake, floatText, fx, renderSprite, setResults, show, sound, updateHud } from "./ui.js";
+import { activeTrackers, boss, comboMultiplier, difficulty, isFrenzy, isGuest, isHost, newTracker, number, playerCount, playerName, resetMotion, rope, saveSettings, scoreText, settings, solo, state, streakMultiplier, teamMode } from "./state.js";
+import { $, clearAlert, confetti, flashAndShake, floatText, fx, renderSprite, resetSpeech, setResults, show, showAlert, sound, updateHud, updateTip } from "./ui.js";
 
 export function recordRep(index, quality, amount = 1, fromCamera = true) {
   if (state.status !== "playing") return;
   const now = performance.now();
   const player = state.trackers[index];
-  if (!player || (fromCamera && now - player.lastRepAt < (REP_GAP[state.exercise] ?? 400))) return;
+  if (!player || now < player.readyAt || (fromCamera && now - player.lastRepAt < (REP_GAP[player.exercise] ?? 400))) return;
   player.lastRepAt = now;
   if (isGuest()) {
     // The host keeps score; a guest only reports its own reps.
@@ -29,7 +29,7 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
     sound("hit");
     // A run of clean reps raises that player's multiplier; any other rep resets it.
     player.streak = quality === "clean" ? player.streak + 1 : 0;
-    const earned = points[quality] * REP_VALUE[state.exercise] * streakMultiplier(player.streak);
+    const earned = points[quality] * (REP_VALUE[player.exercise] ?? 1) * streakMultiplier(player.streak);
     state.scores[index] = scoreText(state.scores[index] + earned);
     floatText(index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
     updateHud();
@@ -38,14 +38,14 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
   }
 
   // Rep damage uses the combo that was active as this rep began.
-  const earned = points[quality] * REP_VALUE[state.exercise] * comboMultiplier() * (isFrenzy(now) ? 2 : 1);
+  const earned = points[quality] * (REP_VALUE[player.exercise] ?? 1) * comboMultiplier() * (isFrenzy(now) ? 2 : 1);
   let damage = earned;
   fx("sound", "hit");
   fx("floatText", index, `${feedback[quality]} +${number(scoreText(earned))}`, quality === "bad" ? "bad" : "");
   if (state.attack) {
     state.attack = null;
     state.parries++;
-    state.nextAttackAt = now + boss().attackEvery;
+    state.nextAttackAt = now + difficulty().attackEvery;
     damage += 2;
     fx("floatText", index, "PARRY! +2", "sync");
     fx("showAlert", "PARRIED!", "good", 1200);
@@ -74,34 +74,37 @@ function hitBoss(amount) {
   state.bossHp = Math.max(0, scoreText(state.bossHp - amount));
   fx("flashAndShake", "hit", "boss-sprite");
   updateHud();
-  if (state.bossHp <= 0) { finishRound(true); return; }
-  const count = boss().phases.length;
-  const phase = Math.min(count - 1, Math.floor((1 - state.bossHp / state.bossMax) * count));
-  if (phase > state.phase) beginPhase(phase);
+  if (state.bossHp <= 0) finishRound(true);
 }
 
-// A new phase pauses scoring and the clock so players can change position.
-function beginPhase(index) {
-  const session = state.session;
-  state.phase = index;
-  state.exercise = boss().phases[index];
-  state.status = "transition";
-  state.attack = null;
-  state.lastEvents = state.lastEvents.map(() => null);
-  state.trackers.forEach(resetMotion);
-  $("pose-tip").textContent = TIPS[state.exercise];
-  fx("showAlert", `PHASE ${index + 1} · ${NAMES[state.exercise].toUpperCase()}!`, "phase");
+const randomBetween = ([min, max]) => min + Math.random() * (max - min);
+function pickMove(current) {
+  const options = difficulty().moves.filter((move) => move !== current);
+  return options.length ? options[Math.floor(Math.random() * options.length)] : current;
+}
+// The boss calls a new move for one player. Only that player's reps pause while
+// they change position; everyone else keeps fighting.
+function switchMove(index, now) {
+  const t = state.trackers[index];
+  t.exercise = pickMove(t.exercise);
+  resetMotion(t);
+  t.readyAt = now + (SWITCH_PAUSE[t.exercise] ?? 3000);
+  t.switchAt = t.readyAt + randomBetween(difficulty().switchEvery);
+  state.lastEvents[index] = null;
+  const name = NAMES[t.exercise].toUpperCase();
+  const line = boss().lines[Math.floor(Math.random() * boss().lines.length)];
+  fx("bossSay", line.replace("{name}", () => playerName(index)).replace("{command}", () => COMMANDS[t.exercise]));
+  fx("floatText", index, `${name}!`, "sync");
   fx("sound", "warn");
-  updateHud();
-  clearTimeout(state.transitionTimer);
-  state.transitionTimer = setTimeout(() => {
-    if (session !== state.session || state.status !== "transition") return;
-    const now = performance.now();
-    state.status = "playing";
-    state.nextAttackAt = now + boss().attackEvery;
-    state.trackers.forEach((t) => { t.lastEventAt = now; });
-    fx("clearAlert");
-  }, ["plank", "pushups"].includes(state.exercise) ? 5000 : 3000);
+  // Guests announce their own switches when the next state update arrives.
+  if (state.mode !== "party" || index === state.myIndex) {
+    showAlert(solo() ? `SWITCH TO ${name}!` : `P${index + 1}: SWITCH TO ${name}!`, "phase", t.readyAt - now);
+  }
+  updateTip();
+}
+function scheduleMoves(now) {
+  if (state.attack) return;
+  activeTrackers().forEach((t, i) => { if (now >= t.switchAt) switchMove(i, now); });
 }
 
 function bossAttack(now) {
@@ -115,7 +118,7 @@ function bossAttack(now) {
   if (now < state.attack.until) return;
   state.attack = null;
   state.hearts--;
-  state.nextAttackAt = now + boss().attackEvery;
+  state.nextAttackAt = now + difficulty().attackEvery;
   fx("showAlert", state.hearts ? `OUCH! ${state.hearts} heart${state.hearts === 1 ? "" : "s"} left` : "OUCH!", "danger", 1400);
   fx("flashAndShake", "shake");
   fx("sound", "hurt");
@@ -129,28 +132,27 @@ export function resetRound() {
   state.combo = 0; state.bestCombo = 0;
   state.frenzyUntil = 0; state.cleanEvents = 0; state.repEvents = 0;
   state.lastEvents = state.trackers.map(() => null); state.endAt = 0;
-  state.scores = [0, 0]; state.phase = 0; state.hearts = HEARTS;
-  state.attack = null; state.parries = 0; state.partyReps = [];
-  if (duel) state.duration = DUEL_TIME;
-  else {
-    const b = boss();
-    state.exercise = b.phases[0];
-    state.bossMax = b.hp * playerCount();
+  state.scores = [0, 0]; state.hearts = HEARTS;
+  state.attack = null; state.parries = 0; state.partyReps = []; state.partyMoves = [];
+  if (duel) {
+    state.duration = DUEL_TIME;
+    state.trackers.forEach((t) => { t.exercise = state.exercise; t.switchAt = Infinity; });
+  } else {
+    const b = boss(), level = difficulty();
+    // Everyone starts on a random move; the host assigns guests theirs.
+    if (!isGuest()) activeTrackers().forEach((t) => { t.exercise = pickMove(null); t.switchAt = Infinity; });
+    state.bossMax = level.hp * playerCount();
     state.bossHp = state.bossMax;
-    state.duration = b.time * 1000;
+    state.duration = level.time * 1000;
     renderSprite($("boss-sprite"), b);
-    $("boss-taunt").textContent = `“${b.taunt}”`;
-    $("phase-pips").replaceChildren(...b.phases.map((exercise) => {
-      const pip = document.createElement("span");
-      pip.title = NAMES[exercise];
-      return pip;
-    }));
+    resetSpeech(b.taunt);
   }
   state.lastVideoTime = -1;
   state.lastFrameAt = 0;
   $("time-value").textContent = String(state.duration / 1000);
-  $("mode-label").textContent = state.mode === "story" ? `STORY · CHAPTER ${ROMAN[state.bossIndex]}`
-    : party ? `REMOTE PARTY · ${playerCount()} PLAYER${playerCount() === 1 ? "" : "S"}` : state.mode === "coop" ? "CO-OP BOSS" : "1V1 DUEL";
+  const players = `${playerCount()} PLAYER${playerCount() === 1 ? "" : "S"}`;
+  $("mode-label").textContent = duel ? "1V1 DUEL"
+    : `${party ? "REMOTE PARTY · " : ""}${difficulty().name.toUpperCase()} · ${state.mode === "solo" ? "SOLO" : players}`;
   $("game-title").textContent = duel ? NAMES[state.exercise] : boss().name;
   $("lobby").hidden = true;
   $("timer").hidden = false;
@@ -161,7 +163,7 @@ export function resetRound() {
   $("shared-mark").textContent = duel ? "✦ VERSUS ✦" : "✦ TEAM UP ✦";
   $("p2-score").hidden = solo();
   $("p2-label").hidden = solo();
-  $("pose-tip").textContent = TIPS[state.exercise];
+  updateTip();
   $("waiting").hidden = true;
   if (!state.stream) {
     $("camera-placeholder").hidden = false;
@@ -179,8 +181,7 @@ export function stopRound() {
   state.session++;
   clearInterval(state.tick);
   clearInterval(state.countdownTimer);
-  clearTimeout(state.transitionTimer);
-  state.tick = state.countdownTimer = state.transitionTimer = 0;
+  state.tick = state.countdownTimer = 0;
   if (state.mode !== "party") stopMedia();
   clearAlert();
   state.status = "idle";
@@ -210,23 +211,33 @@ function startClock(session) {
   state.status = "playing";
   state.endAt = start + state.duration;
   state.lastTickAt = start;
-  if (state.mode !== "duel") state.nextAttackAt = start + boss().attackEvery;
+  if (state.mode !== "duel") {
+    state.nextAttackAt = start + difficulty().attackEvery;
+    activeTrackers().forEach((t) => { t.switchAt = start + randomBetween(difficulty().switchEvery); });
+  }
   state.tick = setInterval(() => {
-    if (session !== state.session) return;
+    if (session !== state.session || state.status !== "playing") return;
     const now = performance.now();
-    if (state.status === "transition") state.endAt += now - state.lastTickAt;
-    state.lastTickAt = now;
-    if (state.status === "playing") {
-      $("time-value").textContent = String(Math.max(0, Math.ceil((state.endAt - now) / 1000)));
-      if (state.combo && teamMode() && state.trackers.some((p) => now - p.lastEventAt > 4000)) {
-        state.combo = 0;
-        state.lastEvents = state.lastEvents.map(() => null);
-      }
-      if (state.mode !== "duel") bossAttack(now);
-      updateHud();
-      if (now >= state.endAt) finishRound(false);
+    const bossFight = state.mode !== "duel";
+    // While every player is changing position, the clock and the boss wait.
+    if (bossFight && activeTrackers().every((t) => now < t.readyAt)) {
+      state.endAt += now - state.lastTickAt;
+      state.nextAttackAt += now - state.lastTickAt;
     }
-    if (isHost() && (state.status === "playing" || state.status === "transition")) broadcastState(now);
+    state.lastTickAt = now;
+    $("time-value").textContent = String(Math.max(0, Math.ceil((state.endAt - now) / 1000)));
+    if (state.combo && teamMode() && activeTrackers().some((p) => now - p.lastEventAt > 4000)) {
+      state.combo = 0;
+      state.lastEvents = state.lastEvents.map(() => null);
+    }
+    if (bossFight) {
+      scheduleMoves(now);
+      bossAttack(now);
+      if (state.status !== "playing") return;
+    }
+    updateHud();
+    if (isHost()) broadcastState(now);
+    if (now >= state.endAt) finishRound(false);
   }, 100);
 }
 
@@ -244,7 +255,6 @@ function finishRound(won = false) {
   const reps = number(state.trackers.reduce((sum, p) => sum + p.reps, 0));
   const clean = `${state.repEvents ? Math.round(state.cleanEvents / state.repEvents * 100) : 0}%`;
   stopRound();
-  state.advance = false;
   if (state.mode === "duel") {
     const [a, b] = state.scores;
     const knockout = Math.abs(rope()) >= 1;
@@ -256,15 +266,11 @@ function finishRound(won = false) {
     won = a !== b;
   } else {
     const b = boss();
-    const story = state.mode === "story";
     const mvp = state.mode === "party" && state.roster.length > 1 ? partyMvp() : "";
-    const finale = story && won && state.bossIndex === BOSSES.length - 1;
-    if (story && won) { progress.cleared = Math.max(progress.cleared, state.bossIndex + 1); saveProgress(); }
-    state.advance = story && won && !finale;
     const stars = Math.max(1, state.hearts);
     $("results-eyebrow").textContent = "THE BATTLE IS OVER";
-    const result = [finale ? "The kingdom is saved!" : won ? `${b.name} is defeated!` : `${b.name} wins this time`,
-      (finale ? "The storybook is complete. The End." : won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
+    const result = [won ? `${b.name} is defeated!` : `${b.name} wins this time`,
+      (won ? b.victory : state.hearts ? "Time ran out. Catch your breath and try again." : "You ran out of hearts. Catch your breath and try again.") + mvp,
       won ? "★".repeat(stars) + "☆".repeat(HEARTS - stars) : "DEFEATED", won ? (state.hearts === HEARTS ? "gold" : "silver") : "bronze",
       [["DAMAGE", `${number(scoreText(state.bossMax - state.bossHp))} / ${state.bossMax}`], ["TOTAL REPS", reps], ["CLEAN REPS", clean],
         teamMode() ? ["BEST COMBO", String(state.bestCombo)] : ["PARRIES", String(state.parries)]]];
@@ -278,9 +284,9 @@ function finishRound(won = false) {
 export function setResultActions(won) {
   const party = state.mode === "party";
   $("again-button").hidden = isGuest();
-  $("again-button").textContent = state.mode === "duel" ? "Rematch" : state.advance ? "Next Chapter" : won ? "Fight Again" : "Try Again";
+  $("again-button").textContent = state.mode === "duel" ? "Rematch" : won ? "Fight Again" : "Try Again";
   $("map-button").hidden = state.mode === "duel";
-  $("map-button").textContent = state.mode === "story" ? "Storybook" : party ? "Party Lobby" : "Choose Boss";
+  $("map-button").textContent = party ? "Party Lobby" : "Change Setup";
   $("menu-button").textContent = party ? "Leave Party" : "Main Menu";
 }
 function partyMvp() {
@@ -290,26 +296,39 @@ function partyMvp() {
   return name ? ` MVP: ${name} with ${number(state.trackers[best].reps)} reps.` : "";
 }
 
-export function showBosses() {
-  const story = state.mode === "story";
-  $("bosses-eyebrow").textContent = story ? "THE STORYBOOK" : "CO-OP BOSS";
-  $("bosses-title").textContent = story ? "Choose your chapter" : "Pick a boss to battle";
-  $("bosses-note").textContent = story
-    ? `${progress.cleared} of ${BOSSES.length} chapters cleared. Defeat each boss to turn the page.`
-    : "Two players, one camera. Bosses have double health, so sync your reps to hit harder.";
-  $("boss-grid").replaceChildren(...BOSSES.map((b, i) => {
-    const locked = story && i > progress.cleared;
-    const cleared = story && i < progress.cleared;
+// A fight draws a random monster, never the same one twice in a row.
+export function randomBoss() {
+  const options = BOSSES.map((_, i) => i).filter((i) => i !== state.bossIndex);
+  return options[Math.floor(Math.random() * options.length)];
+}
+export function startFight() {
+  state.bossIndex = randomBoss();
+  startGame();
+}
+
+// The Boss Fight setup asks how many people share the camera and how hard to go.
+export function showSetup() {
+  const players = settings.players === 2 ? 2 : 1;
+  document.querySelectorAll("[data-players]").forEach((button) => {
+    button.classList.toggle("selected", Number(button.dataset.players) === players);
+  });
+  $("p1-name").value = settings.name;
+  $("p2-name").value = settings.name2;
+  $("p2-name-field").hidden = players === 1;
+  $("difficulty-choice").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, level]) => {
     const card = document.createElement("button");
     card.type = "button";
-    card.className = `boss-card${cleared ? " cleared" : ""}`;
-    card.disabled = locked;
-    card.innerHTML = `<span class="sprite"></span><span class="boss-chapter">${locked ? "🔒 LOCKED" : `CHAPTER ${ROMAN[i]}${cleared ? " · CLEARED" : ""}`}</span>`
-      + `<strong>${b.name}</strong><span class="boss-story">${b.story}</span>`
-      + `<span class="chips">${b.phases.map((exercise) => `<em>${NAMES[exercise]}</em>`).join("")}</span>`;
-    renderSprite(card.querySelector(".sprite"), b);
-    card.addEventListener("click", () => { state.bossIndex = i; startGame(); });
+    card.className = `choice difficulty${key === state.difficulty ? " selected" : ""}`;
+    card.innerHTML = `<strong>${level.name}</strong><span>${level.blurb}</span>`
+      + `<small>${level.hp} HP per player · ${level.time}s</small>`
+      + `<span class="chips">${level.moves.map((move) => `<em>${NAMES[move]}</em>`).join("")}</span>`;
+    card.addEventListener("click", () => { state.difficulty = settings.difficulty = key; saveSettings(); showSetup(); });
     return card;
   }));
-  show("bosses");
+  if (state.screen !== "setup") show("setup");
+}
+export function setPlayers(count) {
+  settings.players = count;
+  saveSettings();
+  showSetup();
 }

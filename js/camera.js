@@ -157,7 +157,7 @@ export function updateDebug() {
   box.hidden = !settings.debug;
   if (!settings.debug) return;
   box.textContent = state.trackers.slice(0, solo() ? 1 : 2).map((p, i) =>
-    `P${i + 1}: ${p.angle === null ? "—" : p.angle.toFixed(p.unit === "×" ? 2 : 1)}${p.unit}${p.method ? ` (${p.method})` : ""} | ${p.phase} | vis ${p.visibility.toFixed(2)} | ${p.form}`
+    `P${i + 1} ${p.exercise ?? "—"}: ${p.angle === null ? "—" : p.angle.toFixed(p.unit === "×" ? 2 : 1)}${p.unit}${p.method ? ` (${p.method})` : ""} | ${p.phase} | vis ${p.visibility.toFixed(2)} | ${p.form}`
   ).join("\n") + `\nFPS: ${state.fps.toFixed(1)}`;
 }
 function poseLoop(now) {
@@ -183,12 +183,13 @@ function poseLoop(now) {
         const t = state.trackers[index];
         t.x = entry.point.x; t.y = entry.point.y; t.seenAt = now;
         // A missing teammate pauses camera scoring; hotkeys still work for testing.
-        if (state.status !== "playing" || detected < needed) return;
-        if (state.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
-        else if (state.exercise === "jacks") processJack(index, entry.landmarks, now);
-        else if (state.exercise === "plank") processPlank(index, entry.landmarks, aspect, now);
-        else if (state.exercise === "punches") processPunch(index, entry.landmarks, entry.world, aspect, now);
-        else processPushup(index, entry.landmarks, aspect, now);
+        // Each player is tracked on their own move, and not while switching to it.
+        if (state.status !== "playing" || detected < needed || now < t.readyAt) return;
+        if (t.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
+        else if (t.exercise === "jacks") processJack(index, entry.landmarks, now);
+        else if (t.exercise === "plank") processPlank(index, entry.landmarks, aspect, now);
+        else if (t.exercise === "punches") processPunch(index, entry.landmarks, entry.world, aspect, now);
+        else if (t.exercise === "pushups") processPushup(index, entry.landmarks, aspect, now);
       });
       drawSkeleton(assigned);
       positionLabels();

@@ -1,32 +1,42 @@
-/* Shared game state, saved settings and story progress, and scoring helpers. */
+/* Shared game state, saved settings, and scoring helpers. */
 
-import { BOSSES, HEARTS, ROPE } from "./config.js";
+import { BOSSES, DIFFICULTIES, HEARTS, ROPE } from "./config.js";
 
 export const settings = loadSettings();
-export const progress = loadProgress();
 export const state = {
-  screen: "menu", mode: "story", exercise: "squats", bossIndex: 0, advance: false,
+  screen: "menu", mode: "solo", exercise: "squats", bossIndex: 0,
+  difficulty: Object.hasOwn(DIFFICULTIES, settings.difficulty) ? settings.difficulty : "normal",
   status: "idle", session: 0, stream: null, landmarker: null,
-  modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, transitionTimer: 0, alertTimer: 0,
+  modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, alertTimer: 0,
   lastVideoTime: -1, lastFrameAt: 0, fps: 0, keyboardOnly: false,
   trackers: [newTracker(), newTracker()],
   combo: 0, bestCombo: 0, frenzyUntil: 0, cleanEvents: 0, repEvents: 0,
   lastEvents: [null, null], endAt: 0, duration: 0, lastTickAt: 0,
-  bossHp: 0, bossMax: 0, phase: 0, hearts: HEARTS, attack: null, nextAttackAt: 0, parries: 0,
+  bossHp: 0, bossMax: 0, hearts: HEARTS, attack: null, nextAttackAt: 0, parries: 0,
   scores: [0, 0], cameraToken: 0, cameraBusy: false,
-  party: null, roster: [], myIndex: 0, partyReps: [], remoteStreams: new Map(),
+  party: null, roster: [], myIndex: 0, partyReps: [], partyMoves: [], remoteStreams: new Map(),
   audio: null, toastTimer: 0
 };
 // In a remote party each device tracks one person; the host keeps score for everyone.
-export const solo = () => state.mode === "story" || state.mode === "party";
+export const solo = () => state.mode === "solo" || state.mode === "party";
 export const teamMode = () => state.mode === "coop" || state.mode === "party";
 export const isHost = () => state.mode === "party" && Boolean(state.party?.isHost);
 export const isGuest = () => state.mode === "party" && Boolean(state.party) && !state.party.isHost;
 export const playerCount = () => state.mode === "party" ? Math.max(1, state.roster.length) : state.mode === "coop" ? 2 : 1;
 export const boss = () => BOSSES[state.bossIndex];
+export const difficulty = () => DIFFICULTIES[state.difficulty];
+export const activeTrackers = () => state.trackers.slice(0, playerCount());
+// The players this device's camera tracks: one in a party, otherwise everyone.
+export const localTrackers = () => state.mode === "party" ? state.trackers.slice(0, 1) : activeTrackers();
+// What the monster calls each player: their party name, or the names from the setup screen.
+export function playerName(index) {
+  if (state.mode === "party") return state.roster[index]?.name || "Adventurer";
+  return (index === 0 ? settings.name : settings.name2) || (state.mode === "solo" ? "Hero" : `Player ${index + 1}`);
+}
 
 export function newTracker() {
-  return { x: null, y: null, seenAt: 0, phase: "UP", angles: [], angle: null,
+  // `exercise` is this player's current move; reps are ignored until `readyAt`.
+  return { x: null, y: null, seenAt: 0, phase: "UP", angles: [], angle: null, exercise: null, readyAt: 0, switchAt: 0,
     visibility: 0, minAngle: 180, maxLean: 0, cleanJack: false, straight: false,
     holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, maxDepth: 0, arms: newArms(),
     form: "—", reps: 0, lastRepAt: -Infinity, lastEventAt: 0 };
@@ -40,20 +50,14 @@ export function resetMotion(t) {
 }
 
 function loadSettings() {
-  const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, swapped: false, name: "" };
+  const defaults = { sound: true, effects: true, debug: false, sensitivity: 0, swapped: false, name: "", name2: "", players: 1, difficulty: "normal" };
   try { return { ...defaults, ...JSON.parse(localStorage.getItem("buffle-settings") || "{}") }; }
   catch { return defaults; }
 }
 export function saveSettings() {
   try { localStorage.setItem("buffle-settings", JSON.stringify(settings)); } catch { /* Storage is optional. */ }
 }
-function loadProgress() {
-  try { return { cleared: 0, ...JSON.parse(localStorage.getItem("buffle-progress") || "{}") }; }
-  catch { return { cleared: 0 }; }
-}
-export function saveProgress() {
-  try { localStorage.setItem("buffle-progress", JSON.stringify(progress)); } catch { /* Storage is optional. */ }
-}
+
 
 export function number(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 export function scoreText(n) { return Math.round(n * 10) / 10; }

@@ -1,15 +1,16 @@
 /* Remote party gameplay: lobby, roster, host-to-guest sync, and the camera grid. */
 
 import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
-import { BOSSES, HEARTS, NAMES, points, TIPS } from "./config.js";
-import { beginCountdown, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
+import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
+import { beginCountdown, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
 import { cleanCode, createParty, MAX_PLAYERS } from "./network.js";
-import { boss, isHost, newTracker, number, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
-import { $, confetti, EFFECTS, renderSprite, setResults, show, sound, toast, updateHud } from "./ui.js";
+import { difficulty, isGuest, isHost, newTracker, number, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
+import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
 
 // Remote party: the host runs the fight and streams state to guests. Each guest
 // tracks its own camera, reports reps, and mirrors the host's HUD and effects.
 const validBoss = (index) => Number.isInteger(index) && index >= 0 && index < BOSSES.length;
+const validDifficulty = (key) => typeof key === "string" && Object.hasOwn(DIFFICULTIES, key);
 function newParty() {
   const party = createParty({
     onRoster: (members) => { if (state.party === party) onRoster(members); },
@@ -33,14 +34,14 @@ export async function openParty(join) {
   if (join && code.length !== 5) { toast("Enter the 5-character party code."); return; }
   stopRound();
   const party = newParty();
-  Object.assign(state, { mode: "party", party, roster: [], bossIndex: 0, keyboardOnly: false });
+  Object.assign(state, { mode: "party", party, roster: [], difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal", keyboardOnly: false });
   setRemoteBusy(true);
   try {
     if (join) await party.join(code, settings.name);
     else await party.create(settings.name);
   } catch (error) {
     party.leave();
-    if (state.party === party) { state.party = null; state.mode = "story"; }
+    if (state.party === party) { state.party = null; state.mode = "solo"; }
     toast(error?.message || "Could not connect to the party.");
     return;
   } finally { setRemoteBusy(false); }
@@ -52,7 +53,9 @@ export function leaveParty(message) {
   party?.leave();
   stopRound();
   stopMedia();
-  Object.assign(state, { mode: "story", roster: [], partyReps: [], keyboardOnly: false });
+  // The lobby's difficulty belonged to the party; go back to this player's own choice.
+  Object.assign(state, { mode: "solo", roster: [], partyReps: [], keyboardOnly: false,
+    difficulty: validDifficulty(settings.difficulty) ? settings.difficulty : "normal" });
   state.remoteStreams.clear();
   renderTiles();
   $("players-bar").hidden = false;
@@ -69,7 +72,7 @@ function onRoster(members) {
     const old = new Map(before.map((m, i) => [m.id, i]));
     state.lastEvents = members.map((m) => (old.has(m.id) && state.lastEvents[old.get(m.id)]) || null);
     state.trackers = members.map((m) => (old.has(m.id) && state.trackers[old.get(m.id)]) || newTracker());
-    state.party.broadcast({ t: "boss", bossIndex: state.bossIndex });
+    state.party.broadcast({ t: "difficulty", difficulty: state.difficulty });
   }
   if (before.length) {
     const had = new Set(before.map((m) => m.id)), has = new Set(members.map((m) => m.id));
@@ -90,30 +93,43 @@ function onPartyMessage(from, message) {
     return;
   }
   const inFight = state.screen === "game" && state.status !== "lobby";
-  if (message.t === "boss" && validBoss(message.bossIndex)) { state.bossIndex = message.bossIndex; renderLobby(); }
-  else if (message.t === "start" && validBoss(message.bossIndex)) startPartyFight(message.bossIndex);
+  if (message.t === "difficulty" && validDifficulty(message.difficulty)) { state.difficulty = message.difficulty; renderLobby(); }
+  else if (message.t === "start" && validBoss(message.bossIndex) && validDifficulty(message.difficulty)) {
+    state.difficulty = message.difficulty;
+    startPartyFight(message.bossIndex, message.moves);
+  }
   else if (message.t === "state" && inFight) applySnapshot(message);
   else if (message.t === "fx" && inFight && Object.hasOwn(EFFECTS, message.name) && Array.isArray(message.args)) EFFECTS[message.name](...message.args);
   else if (message.t === "results" && inFight) showPartyResults(message);
   else if (message.t === "lobby") enterLobby();
 }
+// Each player's move and how long until they're ready travel with every update.
 export function broadcastState(now) {
-  state.party.broadcast({ t: "state", status: state.status, hp: state.bossHp, max: state.bossMax, phase: state.phase,
-    exercise: state.exercise, hearts: state.hearts, attack: Boolean(state.attack), combo: state.combo,
+  state.party.broadcast({ t: "state", status: state.status, hp: state.bossHp, max: state.bossMax,
+    hearts: state.hearts, attack: Boolean(state.attack), combo: state.combo,
     frenzy: Math.max(0, state.frenzyUntil - now), time: Math.max(0, Math.ceil((state.endAt - now) / 1000)),
-    reps: state.trackers.map((t) => t.reps) });
+    reps: state.trackers.map((t) => t.reps), moves: state.trackers.map((t) => t.exercise),
+    ready: state.trackers.map((t) => Math.max(0, Math.round(t.readyAt - now))) });
+}
+function applyMoves(moves) {
+  state.partyMoves = Array.isArray(moves) ? moves.map((move) => Object.hasOwn(NAMES, move) ? move : null) : [];
+  const t = state.trackers[0], mine = state.partyMoves[state.myIndex];
+  if (!mine || mine === t.exercise) return false;
+  t.exercise = mine;
+  resetMotion(t);
+  updateTip();
+  return true;
 }
 function applySnapshot(snapshot) {
-  if (snapshot.status !== "playing" && snapshot.status !== "transition") return;
-  if (Object.hasOwn(NAMES, snapshot.exercise) && snapshot.exercise !== state.exercise) {
-    state.exercise = snapshot.exercise;
-    state.trackers.forEach(resetMotion);
-    $("pose-tip").textContent = TIPS[state.exercise];
-  }
-  state.status = snapshot.status;
+  if (snapshot.status !== "playing") return;
+  const t = state.trackers[0];
+  const ready = Math.max(0, Number(snapshot.ready?.[state.myIndex]) || 0);
+  const hadMove = Boolean(t.exercise);
+  if (applyMoves(snapshot.moves) && hadMove) showAlert(`SWITCH TO ${NAMES[t.exercise].toUpperCase()}!`, "phase", Math.max(1500, ready));
+  t.readyAt = performance.now() + ready;
+  state.status = "playing";
   state.bossHp = Number(snapshot.hp) || 0;
   state.bossMax = Number(snapshot.max) || 1;
-  state.phase = Number(snapshot.phase) || 0;
   state.hearts = Math.max(0, Math.min(HEARTS, Number(snapshot.hearts) || 0));
   state.attack = snapshot.attack ? {} : null;
   state.combo = Number(snapshot.combo) || 0;
@@ -157,20 +173,19 @@ export function enterLobby() {
 }
 function renderLobby() {
   if (state.mode !== "party" || !state.party) return;
-  const host = state.party.isHost, count = playerCount(), b = boss();
+  const host = state.party.isHost, count = playerCount(), level = difficulty();
   $("party-code").textContent = state.party.code;
   $("lobby-status").textContent = `${count} of ${MAX_PLAYERS} players`;
-  $("lobby-hp").textContent = `${b.name}: ${b.hp} × ${count} = ${b.hp * count} HP`;
-  $("boss-picker").replaceChildren(...BOSSES.map((item, i) => {
+  $("lobby-hp").textContent = `${level.name}: ${level.hp} HP × ${count} = ${level.hp * count} HP · random monster`;
+  $("boss-picker").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, item]) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `pick${i === state.bossIndex ? " selected" : ""}`;
+    button.className = `pick${key === state.difficulty ? " selected" : ""}`;
     button.disabled = !host;
-    button.innerHTML = `<span class="sprite"></span><span>${item.name}</span>`;
-    renderSprite(button.querySelector(".sprite"), item);
+    button.innerHTML = `<span><strong>${item.name}</strong><br>${item.blurb}</span>`;
     button.addEventListener("click", () => {
-      state.bossIndex = i;
-      state.party.broadcast({ t: "boss", bossIndex: i });
+      state.difficulty = key;
+      state.party.broadcast({ t: "difficulty", difficulty: key });
       renderLobby();
     });
     return button;
@@ -178,10 +193,11 @@ function renderLobby() {
   $("start-party").hidden = !host;
   $("lobby-wait").hidden = host;
 }
-function startPartyFight(bossIndex) {
+function startPartyFight(bossIndex, moves) {
   stopRound();
   state.bossIndex = bossIndex;
   resetRound();
+  if (isGuest()) { applyMoves(moves); updateHud(); }
   show("game");
   state.status = "loading";
   ensurePoseLoop();
@@ -189,8 +205,8 @@ function startPartyFight(bossIndex) {
 }
 export function hostStart() {
   if (!isHost()) return;
-  state.party.broadcast({ t: "start", bossIndex: state.bossIndex });
-  startPartyFight(state.bossIndex);
+  startPartyFight(randomBoss());
+  state.party.broadcast({ t: "start", bossIndex: state.bossIndex, difficulty: state.difficulty, moves: state.trackers.map((t) => t.exercise) });
 }
 export async function copyInvite() {
   const link = `${location.origin}${location.pathname}?party=${state.party.code}`;
@@ -238,6 +254,8 @@ export function updateTileNames() {
     const label = (i === state.myIndex ? $("stage") : tileFor(i))?.querySelector(".tile-name");
     if (!label) return;
     const reps = isHost() ? state.trackers[i]?.reps ?? 0 : state.partyReps[i] ?? 0;
-    label.textContent = `${i === 0 ? "♛ " : ""}${member.name}${i === state.myIndex ? " (you)" : ""}${fighting ? ` · ${number(reps)} reps` : ""}`;
+    const move = isHost() ? state.trackers[i]?.exercise : i === state.myIndex ? state.trackers[0].exercise : state.partyMoves[i];
+    label.textContent = `${i === 0 ? "♛ " : ""}${member.name}${i === state.myIndex ? " (you)" : ""}`
+      + (fighting ? `${move ? ` · ${NAMES[move]}` : ""} · ${number(reps)} reps` : "");
   });
 }

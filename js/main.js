@@ -1,18 +1,27 @@
 /* Buffle: a single-page, client-side fairy-tale exercise brawler. Wires up the page. */
 
 import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
-import { beginCountdown, recordRep, showBosses, startGame, stopRound } from "./game.js";
+import { beginCountdown, recordRep, setPlayers, showSetup, startFight, startGame, stopRound } from "./game.js";
 import { cleanCode } from "./network.js";
 import { copyInvite, enterLobby, hostStart, leaveParty, openParty } from "./party.js";
-import { progress, saveProgress, saveSettings, settings, solo, state } from "./state.js";
+import { saveSettings, settings, solo, state } from "./state.js";
 import { $, show, toast } from "./ui.js";
 
-$("story-button").addEventListener("click", () => { state.mode = "story"; showBosses(); });
-$("coop-button").addEventListener("click", () => { state.mode = "coop"; showBosses(); });
+$("fight-button").addEventListener("click", showSetup);
+document.querySelectorAll("[data-players]").forEach((button) => button.addEventListener("click", () => setPlayers(Number(button.dataset.players))));
+// Player 1's name is also their remote party name.
+for (const [id, key] of [["p1-name", "name"], ["p2-name", "name2"]]) {
+  $(id).addEventListener("input", (event) => {
+    settings[key] = event.target.value.trim().slice(0, 16);
+    if (key === "name") $("player-name").value = settings.name;
+    saveSettings();
+  });
+}
+$("start-fight").addEventListener("click", () => { state.mode = settings.players === 2 ? "coop" : "solo"; startFight(); });
 $("duel-button").addEventListener("click", () => { state.mode = "duel"; show("exercise"); });
 $("how-button").addEventListener("click", () => show("how"));
 $("settings-button").addEventListener("click", () => show("settings"));
-$("remote-button").addEventListener("click", () => show("remote"));
+$("remote-button").addEventListener("click", () => { $("player-name").value = settings.name; show("remote"); });
 function goToMenu() {
   if (state.party) { leaveParty(); return; }
   if (state.screen === "game") stopRound();
@@ -23,11 +32,11 @@ document.querySelectorAll("[data-screen]").forEach((button) => button.addEventLi
 document.querySelectorAll("[data-exercise]").forEach((button) => button.addEventListener("click", () => { state.exercise = button.dataset.exercise; startGame(); }));
 $("leave-button").addEventListener("click", goToMenu);
 $("menu-button").addEventListener("click", goToMenu);
-$("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showBosses(); });
+$("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showSetup(); });
 $("again-button").addEventListener("click", () => {
-  if (state.party) { hostStart(); return; }
-  if (state.advance) state.bossIndex++;
-  startGame();
+  if (state.party) hostStart();
+  else if (state.mode === "duel") startGame();
+  else startFight();
 });
 $("create-party").addEventListener("click", () => openParty(false));
 $("join-party").addEventListener("click", () => openParty(true));
@@ -82,11 +91,6 @@ $("swap-button").addEventListener("click", () => {
   state.scores.reverse();
   saveSettings(); positionLabels();
   toast(`P1 / P2 ${settings.swapped ? "swapped" : "restored"}`);
-});
-$("reset-progress").addEventListener("click", () => {
-  progress.cleared = 0;
-  saveProgress();
-  toast("Story progress reset");
 });
 window.addEventListener("keydown", (event) => {
   if (state.screen !== "game" || state.status !== "playing" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
