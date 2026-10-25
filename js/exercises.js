@@ -1,11 +1,13 @@
 /* Rep detection: joint-angle math and a state machine per exercise.
 
    The camera sits on the floor, tilted up at the player, and the feet may be out
-   of frame. Facing the camera from that low, steep view, flat 2D angles are
-   distorted, so standing moves (squats, punches) take joint angles from
-   MediaPipe's 3D world landmarks. Floor moves (push-ups, planks) are done side-on,
-   where the flat image shows the true angles and is steadier than the 3D
-   estimate, which is unreliable for a body lying down. */
+   of frame, as can the head and raised hands. Facing the camera from that low,
+   steep view, flat 2D angles are distorted, so punches take joint angles from
+   MediaPipe's 3D world landmarks, and squats and jumping jacks are judged from
+   the hips, knees, and shoulders, which stay in frame. Floor moves (push-ups,
+   planks) work side-on, where the flat image shows the true angles and is
+   steadier than the 3D estimate, or facing the camera, where only the 3D
+   estimate shows how the body lies. */
 
 import { PLANK_TICK } from "./config.js";
 import { recordRep } from "./game.js";
@@ -38,36 +40,31 @@ function bestSide(landmarks, left, right) {
   const chosen = score(left) >= score(right) ? left : right;
   return chosen.every((i) => joint(landmarks, i)) ? chosen : null;
 }
-// The angle at the middle joint, in 3D when world landmarks are available.
-function jointAngle(landmarks, world, [a, b, c], aspect) {
-  if (world?.[a] && world[b] && world[c]) return angle3(world[a], world[b], world[c]);
-  return flatAngle(landmarks, [a, b, c], aspect);
-}
 // The angle at the middle joint as the camera image shows it.
 function flatAngle(landmarks, [a, b, c], aspect) {
   return angle(landmarks[a], landmarks[b], landmarks[c], aspect);
 }
 
-// Squats use the 3D knee angle when the whole leg is visible. With the feet out
-// of frame they use the 3D hip angle (shoulder–hip–knee), which closes just as
-// clearly in a squat; with no legs at all, how far the shoulders drop below
+// Squats are read from the thighs: the hips and knees stay in frame of a floor
+// camera through the whole squat, while the head, shoulders, and feet can leave
+// it. Standing, the knees sit well below the hips in the image. Squatting, the
+// thighs come level and point at the camera, so the knees rise to the hips' height
+// or, closer to a low camera, above it. `rise` is the knees' height below the hips
+// as a percentage of standing: 100 standing, about 0 or less at parallel. With no
+// hips or knees in view, squats fall back to how far the shoulders drop below
 // standing height, in shoulder widths. Each rep keeps the method it started with.
 // Depth alone sets the quality: a tilted-up camera can't judge forward lean.
-export function processSquat(index, landmarks, world, aspect, now) {
+export function processSquat(index, landmarks, aspect, now) {
   const t = state.trackers[index];
-  const leg = bestSide(landmarks, [23,25,27], [24,26,28]);
-  const hips = bestSide(landmarks, [11,23,25], [12,24,26]);
+  const thighs = thighDrop(t, landmarks);
   const torso = shoulderDrop(t, landmarks, aspect);
   if (t.phase === "UP") {
-    const method = leg ? "legs" : hips ? "hips" : torso ? "torso" : null;
-    if (method !== t.method) { t.angles = []; t.method = method; t.unit = method === "torso" ? "×" : "°"; }
+    const method = thighs ? "thighs" : torso ? "torso" : null;
+    if (method !== t.method) { t.angles = []; t.method = method; t.unit = method === "torso" ? "×" : "%"; }
   }
-  if (t.method === "legs" && leg) {
-    t.visibility = minimumVisibility(...leg.map((i) => landmarks[i]));
-    squatRep(t, index, smooth(t, jointAngle(landmarks, world, leg, aspect)), 120, 160, 100, now);
-  } else if (t.method === "hips" && hips) {
-    t.visibility = minimumVisibility(...hips.map((i) => landmarks[i]));
-    squatRep(t, index, smooth(t, jointAngle(landmarks, world, hips, aspect)), 135, 160, 105, now);
+  if (t.method === "thighs" && thighs) {
+    t.visibility = thighs.visibility;
+    squatRep(t, index, smooth(t, thighs.rise), 55, 85, 20, now);
   } else if (t.method === "torso" && torso) {
     t.visibility = torso.visibility;
     // Measured the other way round: depth grows as the player goes down.
@@ -87,6 +84,17 @@ function squatRep(t, index, value, down, up, clean, now) {
     }
   }
 }
+// The knees' height below the hips, averaged over the sides in view, as a
+// percentage of standing. Standing follows the longest recent thighs, fading
+// slowly while standing so stepping toward or away from the camera is absorbed.
+function thighDrop(t, landmarks) {
+  const sides = [[23, 25], [24, 26]].map(([h, k]) => [joint(landmarks, h), joint(landmarks, k)]).filter(([h, k]) => h && k);
+  if (!sides.length) return null;
+  const length = sides.reduce((sum, [hip, knee]) => sum + knee.y - hip.y, 0) / sides.length;
+  if (t.phase === "UP") t.topThigh = Math.max(length, (t.topThigh ?? 0) * .998);
+  if (t.topThigh < .03) return null;
+  return { rise: 100 * length / t.topThigh, visibility: Math.min(...sides.flat().map((p) => p.visibility ?? 1)) };
+}
 // Standing height follows the highest recent shoulder position, drifting down
 // slowly while standing so stepping toward or away from the camera is absorbed.
 function shoulderDrop(t, landmarks, aspect) {
@@ -99,26 +107,41 @@ function shoulderDrop(t, landmarks, aspect) {
   return { depth: (y - t.topY) / width, visibility: minimumVisibility(ls, rs) };
 }
 
-// Jumping jacks need the hands to go above the head and back below the
-// shoulders. When the feet are visible they must also spread and close.
-export function processJack(index, landmarks, now) {
+// Jumping jacks need the arms to go up overhead and back below the shoulders.
+// Judged from the shoulders, since a floor camera often cuts off the head and the
+// raised hands: an arm is up when its wrist is high above the shoulder, its elbow
+// is above it, or its hand has left the top of the frame. When the feet are
+// visible they must also spread and close.
+export function processJack(index, landmarks, aspect, now) {
   const t = state.trackers[index];
-  const upper = [0,11,12,15,16].map((i) => joint(landmarks, i));
-  if (upper.some((p) => !p)) { t.visibility = 0; return; }
-  const [nose, ls, rs, lw, rw] = upper;
+  const ls = joint(landmarks, 11), rs = joint(landmarks, 12);
+  if (!ls || !rs) { t.visibility = 0; return; }
+  const width = Math.hypot((ls.x - rs.x) * aspect, ls.y - rs.y);
+  if (width < .05) return;
   const la = joint(landmarks, 27), ra = joint(landmarks, 28);
   const feet = la && ra;
-  t.visibility = minimumVisibility(...upper, ...(feet ? [la, ra] : []));
+  t.visibility = minimumVisibility(ls, rs, ...(feet ? [la, ra] : []));
+  const slack = settings.sensitivity * .01;
+  // How high each arm is: 2 overhead, 1 raised, 0 neither, -1 down by the side.
+  const arm = ([shoulder, elbowId, wristId]) => {
+    const elbow = joint(landmarks, elbowId), wrist = joint(landmarks, wristId);
+    const lift = (p) => (shoulder.y - p.y) / width;
+    // A hand above the frame comes back with low visibility and a y below 0.
+    const offTop = !wrist && landmarks[wristId]?.y < 0 && (!elbow || lift(elbow) > 0);
+    if (offTop || (wrist && lift(wrist) > 1.2 - slack) || (elbow && lift(elbow) > .6 - slack)) return 2;
+    if ((wrist && lift(wrist) > .7 - slack) || (elbow && lift(elbow) > .3 - slack)) return 1;
+    if (wrist ? lift(wrist) < 0 : elbow && lift(elbow) < -.3) return -1;
+    return 0;
+  };
+  const arms = [arm([ls, 13, 15]), arm([rs, 14, 16])];
   const shoulderWidth = Math.abs(ls.x - rs.x);
-  if (shoulderWidth < .02) return;
-  const feetRatio = feet ? Math.abs(la.x - ra.x) / shoulderWidth : null;
-  const armsHigh = lw.y < nose.y && rw.y < nose.y;
-  const fullyHigh = lw.y < nose.y - .07 && rw.y < nose.y - .07;
-  const armsDown = lw.y > ls.y && rw.y > rs.y;
-  const feetApart = !feet || feetRatio > 1.55 - settings.sensitivity * .01;
-  const feetTogether = !feet || feetRatio < 1.35;
-  const wide = fullyHigh && (!feet || feetRatio > 1.9);
-  t.angle = feet ? feetRatio : null;
+  const feetRatio = feet && shoulderWidth > .02 ? Math.abs(la.x - ra.x) / shoulderWidth : null;
+  const armsHigh = arms.every((a) => a >= 1);
+  const armsDown = arms.every((a) => a === -1);
+  const feetApart = feetRatio === null || feetRatio > 1.55 - slack;
+  const feetTogether = feetRatio === null || feetRatio < 1.35;
+  const wide = arms.every((a) => a === 2) && (feetRatio === null || feetRatio > 1.9);
+  t.angle = feetRatio;
   t.unit = "×";
   if (t.phase === "UP" && armsHigh && feetApart) {
     t.phase = "DOWN";
@@ -131,11 +154,22 @@ export function processJack(index, landmarks, now) {
     }
   }
 }
-// Push-ups and planks are done side-on to the floor camera, so they use the flat
-// image angles. Body straightness runs to the ankle, or the knee if the feet are
-// out of frame.
-export function processPushup(index, landmarks, aspect, now) {
+// Push-ups and planks work side-on to the floor camera or facing it. Side-on,
+// the flat image shows the true angles: the elbow bend, and body straightness to
+// the ankle, or the knee if the feet are out of frame. Facing the camera, the
+// body runs away from it and the image hides both, so a push-up is read from the
+// elbows rising level with the shoulders, and the body's line from the 3D world
+// landmarks. Each rep keeps the view it started in.
+export function processPushup(index, landmarks, world, aspect, now) {
   const t = state.trackers[index];
+  if (t.phase === "UP") {
+    const method = facingCamera(landmarks, aspect) ? "front" : "side";
+    if (method !== t.method) { t.angles = []; t.method = method; t.topReach = t.topShoulderY = null; }
+  }
+  if (t.method === "front") frontPushup(t, index, landmarks, world, aspect, now);
+  else sidePushup(t, index, landmarks, aspect, now);
+}
+function sidePushup(t, index, landmarks, aspect, now) {
   const arm = bestSide(landmarks, [11,13,15], [12,14,16]);
   if (!arm) { if (!pushupBelowFrame(index, now)) t.visibility = 0; return; }
   t.visibility = minimumVisibility(...arm.map((i) => landmarks[i]));
@@ -150,17 +184,76 @@ export function processPushup(index, landmarks, aspect, now) {
   const shoulder = landmarks[arm[0]], hipPoint = joint(landmarks, hip);
   const level = !hipPoint || Math.atan2(Math.abs(shoulder.y - hipPoint.y), Math.abs(shoulder.x - hipPoint.x) * aspect) * 180 / Math.PI < 50;
   Object.assign(t, { belowFrame: false, armSeenAt: now, lastShoulderY: shoulder.y, lastStraight: straight });
-  if (t.phase === "UP" && value < 90 + settings.sensitivity && level) {
+  pushupRep(t, index, value, level, straight, [90, 155, 80], now);
+}
+// Facing the camera, `reach` is how far the elbows sit below the shoulders, in
+// shoulder widths: most of an upper arm at the top, about zero at the bottom. It
+// is scored as a percentage of the top. A rep also needs the body lying away from
+// the camera and the shoulders to have dropped, so raising the arms while
+// standing never scores one.
+function frontPushup(t, index, landmarks, world, aspect, now) {
+  const ls = joint(landmarks, 11), rs = joint(landmarks, 12);
+  const elbows = [13, 14].map((i) => joint(landmarks, i)).filter(Boolean);
+  const body = bodyLine(world);
+  if (!ls || !rs || !elbows.length || !body) { if (!pushupBelowFrame(index, now)) t.visibility = 0; return; }
+  const width = Math.hypot((ls.x - rs.x) * aspect, ls.y - rs.y);
+  if (width < .05) return;
+  t.visibility = minimumVisibility(ls, rs, ...elbows);
+  const shoulderY = (ls.y + rs.y) / 2;
+  const reach = (elbows.reduce((sum, elbow) => sum + elbow.y, 0) / elbows.length - shoulderY) / width;
+  // The top follows the highest recent shoulders and lowest elbows, drifting slowly
+  // so shifting toward or away from the camera is absorbed.
+  if (t.phase === "UP") {
+    t.topReach = Math.max(reach, (t.topReach ?? reach) - .002);
+    t.topShoulderY = Math.min(shoulderY, (t.topShoulderY ?? shoulderY) + .002);
+    t.lowShoulderY = shoulderY;
+  } else t.lowShoulderY = Math.max(t.lowShoulderY, shoulderY);
+  // Elbows not yet below the shoulders: the arms aren't holding the body up.
+  if (t.phase === "UP" && t.topReach < .3) { t.angle = null; return; }
+  const value = smooth(t, 100 * reach / t.topReach);
+  t.unit = "%";
+  const straight = body.line > 150;
+  const lying = body.away > .45 - settings.sensitivity * .01;
+  const dropped = (t.lowShoulderY - t.topShoulderY) / width > .15;
+  Object.assign(t, { belowFrame: false, armSeenAt: now, lastShoulderY: shoulderY, lastStraight: straight });
+  pushupRep(t, index, value, lying && (t.phase === "UP" || dropped), straight, [45, 80, 15], now);
+}
+// `value` falls as the player lowers: a rep goes below `down` and back above `up`,
+// and is clean if it got below `clean` with the body straight throughout. The body
+// must be `level` to start a rep and to score it.
+function pushupRep(t, index, value, level, straight, [down, up, clean], now) {
+  if (t.phase === "UP" && value < down + settings.sensitivity && level) {
     t.phase = "DOWN"; t.minAngle = value; t.straight = straight;
   } else if (t.phase === "DOWN") {
     t.minAngle = Math.min(t.minAngle, value);
     t.straight &&= straight;
-    if (value > 155 - settings.sensitivity * .25) {
+    if (value > up - settings.sensitivity * .25) {
       t.phase = "UP";
-      const quality = t.minAngle < 80 + settings.sensitivity * .5 && t.straight ? "clean" : "ok";
+      const quality = t.minAngle < clean + settings.sensitivity * .5 && t.straight ? "clean" : "ok";
       if (level && now - t.lastRepAt >= 400) recordRep(index, quality);
     }
   }
+}
+// Facing the camera, both shoulders show a full shoulder width apart; side-on they
+// nearly overlap. The upper arm, which shows most of its length either way while
+// the arms hold the body up, is the yardstick.
+function facingCamera(landmarks, aspect) {
+  const ls = joint(landmarks, 11), rs = joint(landmarks, 12);
+  const le = joint(landmarks, 13), re = joint(landmarks, 14);
+  if (!ls || !rs || !(le || re)) return false;
+  const apart = (a, b) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+  return apart(ls, rs) > Math.max(le ? apart(ls, le) : 0, re ? apart(rs, re) : 0) * .8;
+}
+// The body's line from the 3D world landmarks: `away` is how much the torso points
+// away from the camera, near 1 lying down facing it and 0 or below standing up,
+// however the camera is tilted; `line` is the shoulder–hip–knee angle.
+function bodyLine(world) {
+  if (![11, 12, 23, 24, 25, 26].every((i) => world?.[i])) return null;
+  const mid = (a, b) => ({ x: (world[a].x + world[b].x) / 2, y: (world[a].y + world[b].y) / 2, z: (world[a].z + world[b].z) / 2 });
+  const shoulder = mid(11, 12), hip = mid(23, 24), knee = mid(25, 26);
+  const length = Math.hypot(hip.x - shoulder.x, hip.y - shoulder.y, hip.z - shoulder.z);
+  if (!length) return null;
+  return { away: (hip.z - shoulder.z) / length, line: angle3(shoulder, hip, knee) };
 }
 // From a floor camera, the bottom of a push-up can dip below the frame. A player
 // last seen low in the frame who then drops out of view is taken to be at the
@@ -177,7 +270,9 @@ export function pushupBelowFrame(index, now) {
   }
   if (!(now - (t.armSeenAt ?? -Infinity) < 500 && t.lastShoulderY > .6)) return false;
   if (t.phase === "UP") t.straight = t.lastStraight ?? true;
-  Object.assign(t, { belowFrame: true, belowSince: now, phase: "DOWN", minAngle: Math.min(t.phase === "DOWN" ? t.minAngle : 180, 60) });
+  // Counts as full depth: an elbow angle of 60°, or facing the camera, elbows nearly level with the shoulders.
+  const deep = t.method === "front" ? 10 : 60;
+  Object.assign(t, { belowFrame: true, belowSince: now, phase: "DOWN", minAngle: Math.min(t.phase === "DOWN" ? t.minAngle : 180, deep), lowShoulderY: 1 });
   return true;
 }
 // Each arm scores a punch when it goes from bent to straight and back. Elbow
@@ -231,9 +326,6 @@ export function holdsPose(pose, landmarks, aspect) {
   const level = (a, b, within) => Math.abs(a.y - b.y) / width < within;
   const lift = (elbow, shoulder) => (shoulder.y - elbow.y) / width;
   switch (pose) {
-    // Upper arms pointing up, hands (if seen) higher still.
-    case "handsUp": return lift(le, ls) > .6 - slack * .5 && lift(re, rs) > .6 - slack * .5
-      && (!lw || above(lw, le, .2)) && (!rw || above(rw, re, .2));
     // Arms level with the shoulders all the way out; the hands have to be seen to tell it from a flex.
     case "tPose": return wrists && level(lw, ls, .5 + slack) && level(rw, rs, .5 + slack) && level(le, ls, .4 + slack) && level(re, rs, .4 + slack)
       && apart(lw, rw) > 2.6 - slack * 2;
@@ -249,17 +341,15 @@ export function holdsPose(pose, landmarks, aspect) {
 
 // A plank scores one tick per PLANK_TICK held with the body near horizontal.
 // The tick's quality comes from the most the hips sagged or piked during it.
-export function processPlank(index, landmarks, aspect, now) {
+// Side-on, that's the flat shoulder–hip–ankle (or knee) angle; facing the camera,
+// the 3D one, with the torso lying away from the camera and the elbows under the
+// shoulders.
+export function processPlank(index, landmarks, world, aspect, now) {
   const t = state.trackers[index];
-  const body = bestSide(landmarks, [11,23,27], [12,24,28]) || bestSide(landmarks, [11,23,25], [12,24,26]);
-  if (!body) { t.visibility = 0; t.holdStart = 0; return; }
-  const [shoulder, , end] = body.map((i) => landmarks[i]);
-  t.visibility = minimumVisibility(...body.map((i) => landmarks[i]));
-  const value = smooth(t, flatAngle(landmarks, body, aspect));
-  t.unit = "°";
-  // Side-on to a floor camera, a body lying along the floor runs across the frame.
-  const tilt = Math.atan2(Math.abs(shoulder.y - end.y), Math.abs(shoulder.x - end.x) * aspect) * 180 / Math.PI;
-  if (tilt > 45 || value < 145 - settings.sensitivity) { t.phase = "UP"; t.holdStart = 0; return; }
+  const method = facingCamera(landmarks, aspect) ? "front" : "side";
+  if (method !== t.method) { t.angles = []; t.method = method; t.holdStart = 0; }
+  const value = method === "front" ? frontPlank(t, landmarks, world, aspect) : sidePlank(t, landmarks, aspect);
+  if (value === null) { t.phase = "UP"; t.holdStart = 0; return; }
   if (!t.holdStart) { t.phase = "HOLD"; t.holdStart = now; t.holdMin = value; return; }
   t.holdMin = Math.min(t.holdMin, value);
   if (now - t.holdStart < PLANK_TICK) return;
@@ -267,4 +357,30 @@ export function processPlank(index, landmarks, aspect, now) {
   t.holdStart = now;
   t.holdMin = value;
   recordRep(index, quality);
+}
+// Each returns the body's angle while it's in a plank, or null.
+function sidePlank(t, landmarks, aspect) {
+  const body = bestSide(landmarks, [11,23,27], [12,24,28]) || bestSide(landmarks, [11,23,25], [12,24,26]);
+  if (!body) { t.visibility = 0; return null; }
+  const [shoulder, , end] = body.map((i) => landmarks[i]);
+  t.visibility = minimumVisibility(...body.map((i) => landmarks[i]));
+  const value = smooth(t, flatAngle(landmarks, body, aspect));
+  t.unit = "°";
+  // Side-on to a floor camera, a body lying along the floor runs across the frame.
+  const tilt = Math.atan2(Math.abs(shoulder.y - end.y), Math.abs(shoulder.x - end.x) * aspect) * 180 / Math.PI;
+  return tilt > 45 || value < 145 - settings.sensitivity ? null : value;
+}
+function frontPlank(t, landmarks, world, aspect) {
+  const ls = joint(landmarks, 11), rs = joint(landmarks, 12);
+  const elbows = [13, 14].map((i) => joint(landmarks, i)).filter(Boolean);
+  const body = bodyLine(world);
+  if (!ls || !rs || !elbows.length || !body) { t.visibility = 0; return null; }
+  const width = Math.hypot((ls.x - rs.x) * aspect, ls.y - rs.y);
+  t.visibility = minimumVisibility(ls, rs, ...elbows);
+  const value = smooth(t, body.line);
+  t.unit = "°";
+  // Elbows below the shoulders hold the body up; on all fours the hips bend near 90°.
+  const reach = (elbows.reduce((sum, elbow) => sum + elbow.y, 0) / elbows.length - (ls.y + rs.y) / 2) / width;
+  const lying = body.away > .45 - settings.sensitivity * .01;
+  return width < .05 || !lying || reach < .2 || value < 135 - settings.sensitivity ? null : value;
 }

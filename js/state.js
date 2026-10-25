@@ -44,7 +44,7 @@ export function newTracker() {
     pose: null, poseAt: Infinity, poseUntil: 0, poseHeld: 0, poseSent: false,
     belowFrame: false, belowSince: 0, armSeenAt: -Infinity, lastShoulderY: 0, lastStraight: true,
     visibility: 0, minAngle: 180, cleanJack: false, straight: false,
-    holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, arms: newArms(),
+    holdStart: 0, holdMin: 180, streak: 0, method: null, unit: "°", topY: null, topThigh: null, topReach: null, topShoulderY: null, lowShoulderY: 0, arms: newArms(),
     form: "—", reps: 0, lastRepAt: -Infinity, lastEventAt: 0 };
 }
 function newArms() { return [{ phase: "GUARD", max: 0 }, { phase: "GUARD", max: 0 }]; }
@@ -52,7 +52,7 @@ function newArms() { return [{ phase: "GUARD", max: 0 }, { phase: "GUARD", max: 
 export function resetMotion(t) {
   t.phase = "UP"; t.angles = []; t.angle = null; t.minAngle = 180;
   t.cleanJack = false; t.straight = false; t.holdStart = 0; t.holdMin = 180;
-  t.method = null; t.topY = null; t.arms = newArms();
+  t.method = null; t.topY = t.topThigh = null; t.topReach = t.topShoulderY = null; t.arms = newArms();
   // A pose hold must be continuous: losing sight of the player starts it over.
   t.poseHeld = 0;
   t.belowFrame = false;

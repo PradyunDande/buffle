@@ -7,8 +7,8 @@ export const NAMES = { squats: "Squats", jacks: "Jumping Jacks", pushups: "Push-
 export const TIPS = {
   squats: "Face the camera and sit down low, thighs toward the floor.",
   jacks: "Face the camera: hands all the way up, feet out wide.",
-  pushups: "Turn sideways to the camera, body straight from head to heels.",
-  plank: "Turn sideways to the camera and hold a straight line.",
+  pushups: "Face the camera or turn sideways, body straight from head to heels.",
+  plank: "Face the camera or turn sideways and hold a straight line.",
   punches: "Face the camera, guard up, and punch at chest height."
 };
 // Damage per rep relative to a squat. Punches come fast, so each is worth less.
@@ -41,7 +41,6 @@ export const DIFFICULTIES = {
 // until they hold the called pose for POSE_HOLD ms. The spell wears off after
 // POSE_TIMEOUT ms so a pose the camera can't see never leaves anyone stuck.
 export const POSES = {
-  handsUp: { name: "Hands Up", hint: "Both hands high above your head" },
   tPose: { name: "T-Pose", hint: "Arms straight out to the sides" },
   flex: { name: "Flex", hint: "Elbows out at shoulder height, fists up" },
   headTouch: { name: "Hands on Head", hint: "Both hands on top of your head" }

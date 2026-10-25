@@ -234,11 +234,11 @@ function poseLoop(now) {
         if (state.status !== "playing" || detected < needed) return;
         // A frozen player is only watched for the pose they were called to strike.
         if (t.pose) { trackPose(index, holdsPose(t.pose, entry.landmarks, aspect), now); return; }
-        if (t.exercise === "squats") processSquat(index, entry.landmarks, entry.world, aspect, now);
-        else if (t.exercise === "jacks") processJack(index, entry.landmarks, now);
-        else if (t.exercise === "plank") processPlank(index, entry.landmarks, aspect, now);
+        if (t.exercise === "squats") processSquat(index, entry.landmarks, aspect, now);
+        else if (t.exercise === "jacks") processJack(index, entry.landmarks, aspect, now);
+        else if (t.exercise === "plank") processPlank(index, entry.landmarks, entry.world, aspect, now);
         else if (t.exercise === "punches") processPunch(index, entry.landmarks, entry.world, aspect, now);
-        else if (t.exercise === "pushups") processPushup(index, entry.landmarks, aspect, now);
+        else if (t.exercise === "pushups") processPushup(index, entry.landmarks, entry.world, aspect, now);
       });
       drawSkeleton(assigned);
       positionLabels();
