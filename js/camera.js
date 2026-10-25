@@ -2,6 +2,7 @@
 
 import { BONES, MODEL_URL, VISION_URL } from "./config.js";
 import { holdsPose, joint, processJack, processPlank, processPunch, processPushup, processSquat, pushupBelowFrame } from "./exercises.js";
+import { filterPose, newPoseFilter } from "./filter.js";
 import { beginCountdown, trackPose } from "./game.js";
 import { online, resetMotion, settings, solo, state } from "./state.js";
 import { $ } from "./ui.js";
@@ -95,7 +96,7 @@ function assignPlayers(result, now) {
   const poses = result.landmarks || [];
   const candidates = poses.map((landmarks, i) => ({ landmarks, world: result.worldLandmarks?.[i], point: bodyPoint(landmarks) }))
     .filter((x) => x.point);
-  if (solo()) return candidates.length ? [candidates[0], null] : [null, null];
+  if (solo()) return [soloPlayer(candidates, now), null];
   if (candidates.length >= 2) {
     const pair = candidates.slice(0, 2);
     const [a, b] = state.trackers;
@@ -117,6 +118,25 @@ function assignPlayers(result, now) {
     return index === 0 ? [p, null] : [null, p];
   }
   return [null, null];
+}
+// Solo, stay on the person already being tracked: the model doesn't keep its
+// people in a steady order, so someone walking behind the player could otherwise
+// take over mid-rep. With nobody tracked recently, take the largest body in view,
+// the one nearest the camera.
+function soloPlayer(candidates, now) {
+  if (candidates.length < 2) return candidates[0] ?? null;
+  const t = state.trackers[0];
+  if (t.x !== null && now - t.seenAt < 1800) {
+    const distance = (c) => Math.hypot(c.point.x - t.x, c.point.y - t.y);
+    return candidates.reduce((best, c) => distance(c) < distance(best) ? c : best);
+  }
+  const size = ({ landmarks }) => {
+    const seen = landmarks.filter((p) => (p.visibility ?? 1) >= .5);
+    if (!seen.length) return 0;
+    const xs = seen.map((p) => p.x), ys = seen.map((p) => p.y);
+    return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+  };
+  return candidates.reduce((best, c) => size(c) > size(best) ? c : best);
 }
 export function positionLabels() {
   for (let i = 0; i < 2; i++) {
@@ -205,6 +225,9 @@ function checkFraming(assigned, needed, now) {
   else $("framing").hidden = true;
 }
 
+// Each local player's landmark filter, kept across fights; it restarts itself after a gap.
+const filters = [newPoseFilter(), newPoseFilter()];
+
 function poseLoop(now) {
   if (state.screen !== "game" || !state.stream || !state.landmarker) { state.raf = 0; return; }
   const video = $("camera");
@@ -212,7 +235,8 @@ function poseLoop(now) {
     state.lastVideoTime = video.currentTime;
     try {
       const result = state.landmarker.detectForVideo(video, now);
-      const assigned = assignPlayers(result, now);
+      const assigned = assignPlayers(result, now)
+        .map((entry, i) => entry && { ...entry, ...filterPose(filters[i], entry.landmarks, entry.world, now) });
       const needed = solo() ? 1 : 2;
       // A player who dipped below the frame at the bottom of a push-up still counts as there.
       const hidden = state.trackers.slice(0, needed).filter((t, i) => !assigned[i] && pushupBelowFrame(i, now)).length;

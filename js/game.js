@@ -53,7 +53,8 @@ export function recordRep(index, quality, amount = 1, fromCamera = true) {
     state.combo++;
     state.bestCombo = Math.max(state.bestCombo, state.combo);
     if (state.combo % 5 === 0) state.frenzyUntil = now + 5000;
-    const bonus = 3 * (isFrenzy(now) ? 2 : 1);
+    // Fast, cheap moves like punches sync easily, so their bonus shrinks with them.
+    const bonus = 3 * Math.min(1, REP_VALUE[player.exercise] ?? 1) * (isFrenzy(now) ? 2 : 1);
     damage += bonus;
     fx("floatText", index, `SYNC! +${bonus}`, "sync");
     fx("confetti");

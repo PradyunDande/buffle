@@ -1,18 +1,18 @@
 /* Game data: exercises, scoring constants, and the boss roster. */
 
-export const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+export const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
 export const VISION_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
-export const NAMES = { squats: "Squats", jacks: "Jumping Jacks", pushups: "Push-ups", plank: "Plank", punches: "Punches" };
+export const NAMES = { squats: "Squats", jacks: "Jumping Jacks", pushups: "Push-ups", plank: "Straight-Arm Plank", punches: "Punches" };
 // Tips assume the camera is on the floor, tilted up, with the whole body in frame.
 export const TIPS = {
   squats: "Face the camera and sit down low, thighs toward the floor.",
   jacks: "Face the camera: hands all the way up, feet out wide.",
   pushups: "Face the camera or turn sideways, body straight from head to heels.",
-  plank: "Face the camera or turn sideways and hold a straight line.",
-  punches: "Face the camera, guard up, and punch at chest height."
+  plank: "Arms straight under your shoulders, body in a straight line. Face the camera or turn sideways.",
+  punches: "Face the camera, guard up, and punch toward it at chest height."
 };
 // Damage per rep relative to a squat. Punches come fast, so each is worth less.
-export const REP_VALUE = { squats: 1, jacks: 1, pushups: 1.5, plank: 1, punches: .5 };
+export const REP_VALUE = { squats: 1, jacks: 1, pushups: 1.5, plank: 1, punches: .25 };
 // The shortest time between two camera reps from one player.
 export const REP_GAP = { punches: 200 };
 // How long the full-screen "SWITCH TO" callout stays up; reps count right away.
@@ -33,7 +33,7 @@ export const DIFFICULTIES = {
     switchEvery: [14000, 20000], poseEvery: [35000, 50000], moves: ["squats", "punches", "jacks"] },
   normal: { name: "Normal", blurb: "Adds push-ups, and the boss switches faster.", hp: 36, time: 90, attackEvery: 28000,
     switchEvery: [10000, 15000], poseEvery: [25000, 40000], moves: ["squats", "punches", "jacks", "pushups"] },
-  hard: { name: "Hard", blurb: "Every move, planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 18000,
+  hard: { name: "Hard", blurb: "Every move, straight-arm planks included, at a fast pace.", hp: 50, time: 100, attackEvery: 18000,
     switchEvery: [8000, 12000], poseEvery: [18000, 30000], moves: ["squats", "punches", "jacks", "pushups", "plank"] }
 };
 
@@ -52,7 +52,7 @@ export const POSE_LINES = ["Freeze, {name}! Strike a pose: {pose}!", "{name}, yo
 // What a monster tells a player to do when it calls a new move, filling `{command}` in its lines.
 export const COMMANDS = {
   squats: "start doing squats", jacks: "start doing jumping jacks", pushups: "drop and give me push-ups",
-  plank: "hold a plank", punches: "start throwing punches"
+  plank: "hold a straight-arm plank", punches: "start throwing punches"
 };
 
 // Each fight draws one of these monsters at random; it sets the look and the lines.

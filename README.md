@@ -18,9 +18,9 @@ Difficulty sets the fight; the monster only changes the look and lines.
 | --- | --- | --- | --- | --- | --- |
 | Easy | 24 | 90 s | 40 s | 14–20 s | squats, punches, jumping jacks |
 | Normal | 36 | 90 s | 28 s | 10–15 s | + push-ups |
-| Hard | 50 | 100 s | 18 s | 8–12 s | + planks |
+| Hard | 50 | 100 s | 18 s | 8–12 s | + straight-arm planks |
 
-- Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. Push-ups are worth 1.5×, punches 0.5× (they come fast). A held plank deals damage every 1.2 seconds.
+- Every rep deals damage: clean reps 2, half reps 1, sloppy form 0.5. Push-ups are worth 1.5×, punches 0.25× (they come fast, and their co-op SYNC bonus is cut to match). A held straight-arm plank deals damage every 1.2 seconds.
 - The boss calls a random move from the difficulty's list for each player, on that player's own timer, so teammates can be on different moves at once. Each call comes as a line of dialog in the monster's speech bubble, using the player's name ("Hosty, drop and give me push-ups!"). Local players set names on the Boss Fight setup screen; remote players use their party name. Lines live in each boss's `lines` in `js/config.js`.
 - A new move counts from the player's next rep; a full-screen "SWITCH TO" callout shows it for two seconds.
 - The boss attacks on a timer set by the difficulty, and every attack costs the team one of its five hearts. At a typical pace a team loses about one heart on Easy, two on Normal, and three or four on Hard; only on Hard can a slow team run out of hearts (at 90 s) before the clock.
@@ -37,7 +37,7 @@ python3 -m http.server 8000
 
 Open <http://localhost:8000> in a modern browser, choose a mode, and allow camera access. On Windows, `python -m http.server 8000` may be the available command.
 
-The first fight loads MediaPipe Tasks Vision and its lite pose model from the specified CDNs. Internet access is needed for those files and the Google font. The game itself has no backend and sends no webcam video to a server. In a remote party, camera video goes only to the other players.
+The first fight loads MediaPipe Tasks Vision and its full pose model from the specified CDNs. Internet access is needed for those files and the Google font. The game itself has no backend and sends no webcam video to a server. In a remote party, camera video goes only to the other players.
 
 ## Remote parties
 
@@ -70,18 +70,20 @@ The game is plain ES modules with no build step; `index.html` loads `js/main.js`
 | `js/game.js` | The fight loop: reps, the boss's move calls and attacks, clock, results |
 | `js/exercises.js` | Rep detection for squats, jumping jacks, push-ups, and planks |
 | `js/camera.js` | Camera, pose model, and the per-frame tracking loop |
+| `js/filter.js` | One Euro filter that smooths each player's landmarks before rep detection |
 | `js/party.js` | Remote party gameplay: lobby, roster, host-to-guest sync, camera grid |
 | `js/network.js` | PeerJS connections, parties, and matchmaking |
 | `js/voice.js` | Voice chat: microphone, self mute, and per-player volume |
 
 ## Known limitations
 
-- Two-player tracking works best when both people remain fully visible and do not cross paths. Assignments follow the nearest prior hip positions; the **Swap P1 / P2** setting corrects an unwanted assignment.
+- Two-player tracking works best when both people remain fully visible and do not cross paths. Assignments follow the nearest prior hip positions; the **Swap P1 / P2** setting corrects an unwanted assignment. Solo, tracking stays on the person nearest where the player was last seen, so someone walking behind doesn't take over; with nobody tracked recently it picks the largest body in view.
+- Landmarks pass through a One Euro filter before rep detection: it smooths hard while a point is still and barely at all while it moves fast, so standing jitter drops without lagging quick moves like punches. The filter restarts after a player is out of view for half a second.
 - **Camera setup:** the camera goes on the floor, leaning against something and tilted up at the players, far enough back that everyone is in frame from head to knees (the feet can be out of frame). Before a local match, a card above the camera explains this and the countdown waits until every player's head and both knees have been visible for a second (or someone presses **Start anyway**). Online, the same card guides each player in the lobby.
 - Facing the camera from that low, tilted view, flat 2D angles are distorted, so punches measure joint angles from MediaPipe's 3D world landmarks, and squats and jumping jacks are judged from the hips, knees, and shoulders, which stay in frame when the head, raised hands, and feet don't. The floor moves (push-ups and planks) work side-on, where the flat image shows the true angles and is steadier than MediaPipe's 3D estimate, or facing the camera, where only the 3D estimate shows how the body lies.
   - Squats are read from the thighs. Standing, the knees sit well below the hips in the image; at parallel the thighs point at the low camera, so the knees rise to the hips' height or above. A rep goes below 55% of the standing thigh height and back above 85%, and is clean below 20%. Depth alone sets the quality; forward lean isn't judged, because a tilted camera can't measure it reliably. With no hips or knees in view, squats fall back to how far the shoulders drop below standing height.
   - Jumping jacks face the camera: arms up overhead, feet apart, then arms back below the shoulders. Arms are judged from the shoulders, since the head and raised hands often leave the frame: an arm is up when its wrist is high above the shoulder, its elbow is above it, or its hand has gone off the top of the frame. With the feet out of frame, only the arms are checked.
-  - Punches face the camera and count each arm going from bent to straight at chest height. The 3D depth estimate is the least reliable signal, so tune it with the debug overlay and sensitivity slider.
+  - Punches face the camera and count each arm going out and back to the guard at chest height. A punch thrown straight at the camera barely changes the flat image and the 3D depth estimate often misses it, so an arm also counts as out when its elbow comes up near shoulder height (in a guard it's tucked well below). An arm whose elbow is briefly hidden behind its own fist keeps its state. Tune with the debug overlay and sensitivity slider.
   - Push-ups and planks work side-on or facing the camera; the shoulders decide which (a full shoulder width apart means facing it), and each push-up keeps the view it started in. Side-on, they use the flat image angles: the elbow bend, and body straightness against the ankle, or the knee if the feet are out of frame. A push-up only counts with the body roughly level.
   - Facing the camera, a push-up is read from the elbows rising from below the shoulders to level with them, as a percentage of the top position. It only counts with the torso lying away from the camera in the 3D world landmarks and the shoulders visibly dropping, so raising your arms while standing never scores. A front-facing plank needs the torso lying away from the camera, elbows under the shoulders, and a 3D shoulder–hip–knee angle of at least 135° (on all fours it's near 90°), which also sets each tick's quality. If the bottom of a push-up dips below the frame, the player is treated as at the bottom of the rep for up to three seconds, and rising back into view with straight arms finishes it.
 - Lighting, camera angle, loose clothing, and partial bodies can affect pose detection and form scores. The sensitivity slider can help, but full movements are more reliable.

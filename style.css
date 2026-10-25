@@ -1321,7 +1321,8 @@ body:has(#game.active) .corner {
 .callout strong {
   max-width: 100%;
   color: var(--ui-accent-light);
-  font: clamp(80px, 16vw, 260px)/.9 var(--font-display);
+  /* 16vw keeps the longest word, STRAIGHT-, whole on a phone. */
+  font: clamp(48px, 16vw, 260px)/.9 var(--font-display);
   text-transform: uppercase;
   text-shadow: 10px 10px 0 var(--shadow-hard);
   overflow-wrap: anywhere;

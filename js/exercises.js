@@ -28,11 +28,11 @@ function angle3(a, b, c) {
   const cosine = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (Math.hypot(...u) * Math.hypot(...v));
   return Math.acos(Math.max(-1, Math.min(1, cosine))) * 180 / Math.PI;
 }
-function smooth(tracker, value) {
-  tracker.angles.push(value);
-  if (tracker.angles.length > 5) tracker.angles.shift();
-  tracker.angle = tracker.angles.reduce((sum, n) => sum + n, 0) / tracker.angles.length;
-  return tracker.angle;
+// Landmarks arrive already smoothed (see filter.js); this records a detector's
+// current measurement for the debug readout.
+function reading(tracker, value) {
+  tracker.angle = value;
+  return value;
 }
 // The better-seen side's landmark ids, or null if any of them is out of view.
 function bestSide(landmarks, left, right) {
@@ -60,15 +60,15 @@ export function processSquat(index, landmarks, aspect, now) {
   const torso = shoulderDrop(t, landmarks, aspect);
   if (t.phase === "UP") {
     const method = thighs ? "thighs" : torso ? "torso" : null;
-    if (method !== t.method) { t.angles = []; t.method = method; t.unit = method === "torso" ? "×" : "%"; }
+    if (method !== t.method) { t.method = method; t.unit = method === "torso" ? "×" : "%"; }
   }
   if (t.method === "thighs" && thighs) {
     t.visibility = thighs.visibility;
-    squatRep(t, index, smooth(t, thighs.rise), 55, 85, 20, now);
+    squatRep(t, index, reading(t, thighs.rise), 55, 85, 20, now);
   } else if (t.method === "torso" && torso) {
     t.visibility = torso.visibility;
     // Measured the other way round: depth grows as the player goes down.
-    squatRep(t, index, -smooth(t, torso.depth), -.45, -.2, -.8, now);
+    squatRep(t, index, -reading(t, torso.depth), -.45, -.2, -.8, now);
   } else t.visibility = 0;
 }
 // `value` falls as the player squats: down below `down`, back up above `up`,
@@ -164,7 +164,7 @@ export function processPushup(index, landmarks, world, aspect, now) {
   const t = state.trackers[index];
   if (t.phase === "UP") {
     const method = facingCamera(landmarks, aspect) ? "front" : "side";
-    if (method !== t.method) { t.angles = []; t.method = method; t.topReach = t.topShoulderY = null; }
+    if (method !== t.method) { t.method = method; t.topReach = t.topShoulderY = null; }
   }
   if (t.method === "front") frontPushup(t, index, landmarks, world, aspect, now);
   else sidePushup(t, index, landmarks, aspect, now);
@@ -173,7 +173,7 @@ function sidePushup(t, index, landmarks, aspect, now) {
   const arm = bestSide(landmarks, [11,13,15], [12,14,16]);
   if (!arm) { if (!pushupBelowFrame(index, now)) t.visibility = 0; return; }
   t.visibility = minimumVisibility(...arm.map((i) => landmarks[i]));
-  const value = smooth(t, flatAngle(landmarks, arm, aspect));
+  const value = reading(t, flatAngle(landmarks, arm, aspect));
   t.unit = "°";
   // With neither the ankle nor the knee in view, form is judged on depth alone.
   const left = arm[0] === 11;
@@ -210,7 +210,7 @@ function frontPushup(t, index, landmarks, world, aspect, now) {
   } else t.lowShoulderY = Math.max(t.lowShoulderY, shoulderY);
   // Elbows not yet below the shoulders: the arms aren't holding the body up.
   if (t.phase === "UP" && t.topReach < .3) { t.angle = null; return; }
-  const value = smooth(t, 100 * reach / t.topReach);
+  const value = reading(t, 100 * reach / t.topReach);
   t.unit = "%";
   const straight = body.line > 150;
   const lying = body.away > .45 - settings.sensitivity * .01;
@@ -275,32 +275,45 @@ export function pushupBelowFrame(index, now) {
   Object.assign(t, { belowFrame: true, belowSince: now, phase: "DOWN", minAngle: Math.min(t.phase === "DOWN" ? t.minAngle : 180, deep), lowShoulderY: 1 });
   return true;
 }
-// Each arm scores a punch when it goes from bent to straight and back. Elbow
-// angles use MediaPipe's 3D world landmarks, so a punch thrown straight at the
-// camera still reads as straight. Arms hanging at the sides never count.
+// Each arm scores a punch when it goes out and back to the guard. A punch thrown
+// straight at the camera barely changes the flat image, and the 3D depth estimate
+// often misses it too, so an arm is also out when its elbow comes up near
+// shoulder height: tucked in a guard, the elbow sits well below the shoulder.
+// Facing a low camera, an arm pointed at it shows the elbow at or above the
+// shoulder. Arms swinging at the sides never count. An arm that briefly drops out
+// of view, as an elbow hidden behind its own fist does, keeps its state.
 export function processPunch(index, landmarks, world, aspect, now) {
   const t = state.trackers[index];
   const ls = joint(landmarks, 11), rs = joint(landmarks, 12);
   if (!ls || !rs) { t.visibility = 0; return; }
   const width = Math.hypot((ls.x - rs.x) * aspect, ls.y - rs.y);
+  if (width < .05) return;
+  const slack = settings.sensitivity * .01;
   const extend = 145 - settings.sensitivity;
   let best = null;
   t.visibility = 0;
   [[11,13,15], [12,14,16]].forEach((ids, side) => {
     const arm = ids.map((i) => joint(landmarks, i));
     const guard = t.arms[side];
-    if (arm.some((p) => !p)) { guard.phase = "GUARD"; return; }
+    if (arm.some((p) => !p)) return;
     t.visibility = Math.max(t.visibility, minimumVisibility(...arm));
     const [shoulder, elbow, wrist] = world ? ids.map((i) => world[i]) : arm.map((p) => ({ x: p.x * aspect, y: p.y, z: (p.z ?? 0) * aspect }));
     const bend = angle3(shoulder, elbow, wrist);
+    // The elbow's height relative to its shoulder, in shoulder widths: about -0.8 in a guard, 0 or more punching.
+    const lift = (arm[0].y - arm[1].y) / width;
     best = Math.max(best ?? 0, bend);
     const raised = arm[2].y < arm[0].y + width * .9;
-    if (guard.phase === "GUARD" && bend > extend && raised) { guard.phase = "OUT"; guard.max = bend; }
+    // Either sign puts the arm out; it's back in the guard once the arm has bent
+    // and the elbow has dropped, below the guard line or well below its height in
+    // the punch (a guard held with the elbows flared out sits higher).
+    const out = raised && (lift > -.35 + slack || bend > extend);
+    if (guard.phase === "GUARD" && out) Object.assign(guard, { phase: "OUT", max: bend, top: lift });
     else if (guard.phase === "OUT") {
       guard.max = Math.max(guard.max, bend);
-      if (bend < 110) {
+      guard.top = Math.max(guard.top, lift);
+      if (bend < 110 && (lift < -.45 + slack || lift < guard.top - .3)) {
         guard.phase = "GUARD";
-        recordRep(index, guard.max > 160 - settings.sensitivity * .5 ? "clean" : "ok");
+        recordRep(index, guard.max > 160 - settings.sensitivity * .5 || guard.top > -.1 ? "clean" : "ok");
       }
     }
   });
@@ -347,7 +360,7 @@ export function holdsPose(pose, landmarks, aspect) {
 export function processPlank(index, landmarks, world, aspect, now) {
   const t = state.trackers[index];
   const method = facingCamera(landmarks, aspect) ? "front" : "side";
-  if (method !== t.method) { t.angles = []; t.method = method; t.holdStart = 0; }
+  if (method !== t.method) { t.method = method; t.holdStart = 0; }
   const value = method === "front" ? frontPlank(t, landmarks, world, aspect) : sidePlank(t, landmarks, aspect);
   if (value === null) { t.phase = "UP"; t.holdStart = 0; return; }
   if (!t.holdStart) { t.phase = "HOLD"; t.holdStart = now; t.holdMin = value; return; }
@@ -364,7 +377,7 @@ function sidePlank(t, landmarks, aspect) {
   if (!body) { t.visibility = 0; return null; }
   const [shoulder, , end] = body.map((i) => landmarks[i]);
   t.visibility = minimumVisibility(...body.map((i) => landmarks[i]));
-  const value = smooth(t, flatAngle(landmarks, body, aspect));
+  const value = reading(t, flatAngle(landmarks, body, aspect));
   t.unit = "°";
   // Side-on to a floor camera, a body lying along the floor runs across the frame.
   const tilt = Math.atan2(Math.abs(shoulder.y - end.y), Math.abs(shoulder.x - end.x) * aspect) * 180 / Math.PI;
@@ -377,7 +390,7 @@ function frontPlank(t, landmarks, world, aspect) {
   if (!ls || !rs || !elbows.length || !body) { t.visibility = 0; return null; }
   const width = Math.hypot((ls.x - rs.x) * aspect, ls.y - rs.y);
   t.visibility = minimumVisibility(ls, rs, ...elbows);
-  const value = smooth(t, body.line);
+  const value = reading(t, body.line);
   t.unit = "°";
   // Elbows below the shoulders hold the body up; on all fours the hips bend near 90°.
   const reach = (elbows.reduce((sum, elbow) => sum + elbow.y, 0) / elbows.length - (ls.y + rs.y) / 2) / width;
