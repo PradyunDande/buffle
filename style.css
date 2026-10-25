@@ -114,9 +114,6 @@ h1 {
   text-shadow: 6px 6px 0 var(--shadow-hard);
 }
 
-h1 span {
-  color: var(--ui-accent);
-}
 
 h2 {
   font-size: clamp(34px, 5vw, 52px);
@@ -159,31 +156,8 @@ h3 {
   flex: 1;
 }
 
-.header {
-  height: 72px;
-  display: flex;
-  align-items: center;
-  border-bottom: var(--stroke) solid var(--ui-border);
-}
 
-.brand {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--ui-accent-light);
-  font: 32px var(--font-display);
-  text-transform: uppercase;
-  text-shadow: 3px 3px 0 var(--shadow-hard);
-}
 
-.footer {
-  padding: 26px 0;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 16px;
-  letter-spacing: .2em;
-  text-transform: uppercase;
-}
 
 .screen {
   display: none;
@@ -312,10 +286,6 @@ kbd {
   color: var(--text-muted);
 }
 
-.tagline strong {
-  color: var(--ui-accent-light);
-  font-weight: 400;
-}
 
 .menu-grid {
   max-width: 520px;
@@ -409,13 +379,6 @@ kbd {
   font-size: 20px;
   text-transform: uppercase;
   letter-spacing: .12em;
-}
-
-.choice small {
-  color: var(--ui-accent);
-  font-size: 18px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
 }
 
 /* Difficulty level: three square pips, filled up to the level. */
@@ -1412,9 +1375,6 @@ kbd {
     padding: 0 16px;
   }
 
-  .header {
-    height: 60px;
-  }
 
   .hero {
     margin: 40px auto 48px;

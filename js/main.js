@@ -27,7 +27,6 @@ function goToMenu() {
   if (state.screen === "game") stopRound();
   show("menu");
 }
-$("brand").addEventListener("click", goToMenu);
 document.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => show(button.dataset.screen)));
 document.querySelectorAll("[data-exercise]").forEach((button) => button.addEventListener("click", () => { state.exercise = button.dataset.exercise; startGame(); }));
 $("leave-button").addEventListener("click", goToMenu);

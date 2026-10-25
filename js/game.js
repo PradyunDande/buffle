@@ -284,7 +284,7 @@ function finishRound(won = false) {
 export function setResultActions(won) {
   const party = state.mode === "party";
   $("again-button").hidden = isGuest();
-  $("again-button").textContent = state.mode === "duel" ? "Rematch" : won ? "Fight Again" : "Try Again";
+  $("again-button").textContent = state.mode === "duel" ? "Rematch" : won ? "Scuffle Again" : "Try Again";
   $("map-button").hidden = state.mode === "duel";
   $("map-button").textContent = party ? "Party Lobby" : "Change Setup";
   $("menu-button").textContent = party ? "Leave Party" : "Main Menu";
@@ -319,7 +319,7 @@ export function showSetup() {
     const card = document.createElement("button");
     card.type = "button";
     card.className = `choice difficulty${key === state.difficulty ? " selected" : ""}`;
-    card.innerHTML = `<strong>${level.name}</strong>${difficultyPips(i + 1)}<small>${level.hp} HP × player</small>`;
+    card.innerHTML = `<strong>${level.name}</strong>${difficultyPips(i + 1)}`;
     card.addEventListener("click", () => { state.difficulty = settings.difficulty = key; saveSettings(); showSetup(); });
     return card;
   }));
