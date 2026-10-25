@@ -2,7 +2,7 @@
 
 import { ensurePoseLoop, positionLabels, prepareCamera, stopMedia } from "./camera.js";
 import { BOSSES, DIFFICULTIES, HEARTS, NAMES, points } from "./config.js";
-import { beginCountdown, difficultyPips, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
+import { beginCountdown, difficultyPips, moveList, randomBoss, recordRep, resetRound, setResultActions, stopRound } from "./game.js";
 import { cleanCode, createParty, MAX_PLAYERS } from "./network.js";
 import { difficulty, isGuest, isHost, newTracker, number, playerCount, resetMotion, saveSettings, settings, state } from "./state.js";
 import { $, confetti, EFFECTS, setResults, show, showAlert, sound, toast, updateHud, updateTip } from "./ui.js";
@@ -182,7 +182,7 @@ function renderLobby() {
     button.type = "button";
     button.className = `pick${key === state.difficulty ? " selected" : ""}`;
     button.disabled = !host;
-    button.innerHTML = `<span>${item.name}</span>${difficultyPips(i + 1)}`;
+    button.innerHTML = `<span class="pick-head"><span>${item.name}</span>${difficultyPips(i + 1)}</span>${moveList(item)}`;
     button.addEventListener("click", () => {
       state.difficulty = key;
       state.party.broadcast({ t: "difficulty", difficulty: key });

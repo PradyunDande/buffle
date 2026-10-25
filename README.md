@@ -6,7 +6,7 @@
 
 - **Boss Fight** (1–2 players, 1 camera): choose how many people are playing and a difficulty, and a random monster appears: the Big Bad Wolf, the Bridge Troll, the Wicked Witch, or the Tower Dragon (never the same one twice in a row). With two players, reps finished within 700ms of each other deal SYNC bonus damage and build a combo; every five syncs triggers FRENZY.
 - **Remote Party** (up to 6 players, one device each): one player creates a party and shares its 5-letter code or invite link; the others join from their own devices. Everyone's camera appears in a grid, the host picks the difficulty, a random monster appears, and boss HP is multiplied by the number of players.
-- **1v1 Duel** (2 players, 1 camera): a 45-second tug-of-war on one exercise. Clean-rep streaks multiply your points. A 25-point lead wins by knockout.
+- **1v1 Scuffle** (2 players, 1 camera): a 45-second tug-of-war. Pick a difficulty and the game calls random moves from that difficulty's list, always the same move for both players at the same moment; both pause together while switching. Clean-rep streaks multiply your points. A 25-point lead wins by knockout.
 
 ## Boss fights
 

@@ -1,7 +1,7 @@
 /* Buffle: a single-page, client-side fairy-tale exercise brawler. Wires up the page. */
 
 import { positionLabels, prepareCamera, stopMedia, updateDebug } from "./camera.js";
-import { beginCountdown, recordRep, setPlayers, showSetup, startFight, startGame, stopRound } from "./game.js";
+import { beginCountdown, recordRep, setPlayers, showDuelSetup, showSetup, startFight, startGame, stopRound } from "./game.js";
 import { cleanCode } from "./network.js";
 import { copyInvite, enterLobby, hostStart, leaveParty, openParty } from "./party.js";
 import { saveSettings, settings, solo, state } from "./state.js";
@@ -18,7 +18,7 @@ for (const [id, key] of [["p1-name", "name"], ["p2-name", "name2"]]) {
   });
 }
 $("start-fight").addEventListener("click", () => { state.mode = settings.players === 2 ? "coop" : "solo"; startFight(); });
-$("duel-button").addEventListener("click", () => { state.mode = "duel"; show("exercise"); });
+$("duel-button").addEventListener("click", showDuelSetup);
 $("how-button").addEventListener("click", () => show("how"));
 $("settings-button").addEventListener("click", () => show("settings"));
 $("remote-button").addEventListener("click", () => { $("player-name").value = settings.name; show("remote"); });
@@ -28,7 +28,7 @@ function goToMenu() {
   show("menu");
 }
 document.querySelectorAll("[data-screen]").forEach((button) => button.addEventListener("click", () => show(button.dataset.screen)));
-document.querySelectorAll("[data-exercise]").forEach((button) => button.addEventListener("click", () => { state.exercise = button.dataset.exercise; startGame(); }));
+$("start-duel").addEventListener("click", () => { state.mode = "duel"; startGame(); });
 $("leave-button").addEventListener("click", goToMenu);
 $("menu-button").addEventListener("click", goToMenu);
 $("map-button").addEventListener("click", () => { if (state.party) enterLobby(); else showSetup(); });

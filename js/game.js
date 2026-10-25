@@ -83,27 +83,41 @@ function pickMove(current) {
   return options.length ? options[Math.floor(Math.random() * options.length)] : current;
 }
 // The boss calls a new move for one player. Only that player's reps pause while
-// they change position; everyone else keeps fighting.
-function switchMove(index, now) {
+// they change position; everyone else keeps fighting. In 1v1 both players get
+// the same move, so `move` is picked once for both.
+function switchMove(index, now, move = pickMove(state.trackers[index].exercise)) {
   const t = state.trackers[index];
-  t.exercise = pickMove(t.exercise);
+  t.exercise = move;
   resetMotion(t);
   t.readyAt = now + (SWITCH_PAUSE[t.exercise] ?? 3000);
   t.switchAt = t.readyAt + randomBetween(difficulty().switchEvery);
   state.lastEvents[index] = null;
   const name = NAMES[t.exercise].toUpperCase();
-  const line = boss().lines[Math.floor(Math.random() * boss().lines.length)];
-  fx("bossSay", line.replace("{name}", () => playerName(index)).replace("{command}", () => COMMANDS[t.exercise]));
+  const duel = state.mode === "duel";
+  if (!duel) {
+    const line = boss().lines[Math.floor(Math.random() * boss().lines.length)];
+    fx("bossSay", line.replace("{name}", () => playerName(index)).replace("{command}", () => COMMANDS[t.exercise]));
+  }
   fx("floatText", index, `${name}!`, "sync");
-  fx("sound", "warn");
   // Guests announce their own switches when the next state update arrives.
-  if (state.mode !== "party" || index === state.myIndex) {
-    showAlert(solo() ? `SWITCH TO ${name}!` : `P${index + 1}: SWITCH TO ${name}!`, "phase", t.readyAt - now);
+  if (duel ? index === 0 : state.mode !== "party" || index === state.myIndex) {
+    fx("sound", "warn");
+    showAlert(solo() || duel ? `SWITCH TO ${name}!` : `P${index + 1}: SWITCH TO ${name}!`, "phase", t.readyAt - now);
   }
   updateTip();
 }
 function scheduleMoves(now) {
   if (state.attack) return;
+  if (state.mode === "duel") {
+    // Duelists share one timer and always switch together.
+    const [first, second] = state.trackers;
+    if (now < first.switchAt) return;
+    const move = pickMove(first.exercise);
+    switchMove(0, now, move);
+    switchMove(1, now, move);
+    second.switchAt = first.switchAt;
+    return;
+  }
   activeTrackers().forEach((t, i) => { if (now >= t.switchAt) switchMove(i, now); });
 }
 
@@ -136,7 +150,8 @@ export function resetRound() {
   state.attack = null; state.parries = 0; state.partyReps = []; state.partyMoves = [];
   if (duel) {
     state.duration = DUEL_TIME;
-    state.trackers.forEach((t) => { t.exercise = state.exercise; t.switchAt = Infinity; });
+    const move = pickMove(null);
+    state.trackers.forEach((t) => { t.exercise = move; t.switchAt = Infinity; });
   } else {
     const b = boss(), level = difficulty();
     // Everyone starts on a random move; the host assigns guests theirs.
@@ -151,9 +166,9 @@ export function resetRound() {
   state.lastFrameAt = 0;
   $("time-value").textContent = String(state.duration / 1000);
   const players = `${playerCount()} PLAYER${playerCount() === 1 ? "" : "S"}`;
-  $("mode-label").textContent = duel ? "1V1 DUEL"
+  $("mode-label").textContent = duel ? `1V1 SCUFFLE · ${difficulty().name.toUpperCase()}`
     : `${party ? "REMOTE PARTY · " : ""}${difficulty().name.toUpperCase()} · ${state.mode === "solo" ? "SOLO" : players}`;
-  $("game-title").textContent = duel ? NAMES[state.exercise] : boss().name;
+  $("game-title").textContent = duel ? NAMES[state.trackers[0].exercise] : boss().name;
   $("lobby").hidden = true;
   $("timer").hidden = false;
   $("arena").hidden = duel;
@@ -211,7 +226,10 @@ function startClock(session) {
   state.status = "playing";
   state.endAt = start + state.duration;
   state.lastTickAt = start;
-  if (state.mode !== "duel") {
+  if (state.mode === "duel") {
+    const switchAt = start + randomBetween(difficulty().switchEvery);
+    state.trackers.forEach((t) => { t.switchAt = switchAt; });
+  } else {
     state.nextAttackAt = start + difficulty().attackEvery;
     activeTrackers().forEach((t) => { t.switchAt = start + randomBetween(difficulty().switchEvery); });
   }
@@ -220,7 +238,7 @@ function startClock(session) {
     const now = performance.now();
     const bossFight = state.mode !== "duel";
     // While every player is changing position, the clock and the boss wait.
-    if (bossFight && activeTrackers().every((t) => now < t.readyAt)) {
+    if (activeTrackers().every((t) => now < t.readyAt)) {
       state.endAt += now - state.lastTickAt;
       state.nextAttackAt += now - state.lastTickAt;
     }
@@ -230,8 +248,8 @@ function startClock(session) {
       state.combo = 0;
       state.lastEvents = state.lastEvents.map(() => null);
     }
+    scheduleMoves(now);
     if (bossFight) {
-      scheduleMoves(now);
       bossAttack(now);
       if (state.status !== "playing") return;
     }
@@ -315,15 +333,27 @@ export function showSetup() {
   $("p1-name").value = settings.name;
   $("p2-name").value = settings.name2;
   $("p2-name-field").hidden = players === 1;
-  $("difficulty-choice").replaceChildren(...Object.entries(DIFFICULTIES).map(([key, level], i) => {
+  renderDifficulties("difficulty-choice", showSetup);
+  if (state.screen !== "setup") show("setup");
+}
+// 1v1 Scuffle only asks for a difficulty: it sets which moves come up and how often.
+export function showDuelSetup() {
+  renderDifficulties("duel-difficulty", showDuelSetup);
+  if (state.screen !== "exercise") show("exercise");
+}
+function renderDifficulties(id, refresh) {
+  $(id).replaceChildren(...Object.entries(DIFFICULTIES).map(([key, level], i) => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = `choice difficulty${key === state.difficulty ? " selected" : ""}`;
-    card.innerHTML = `<strong>${level.name}</strong>${difficultyPips(i + 1)}`;
-    card.addEventListener("click", () => { state.difficulty = settings.difficulty = key; saveSettings(); showSetup(); });
+    card.innerHTML = `<strong>${level.name}</strong>${difficultyPips(i + 1)}${moveList(level)}`;
+    card.addEventListener("click", () => { state.difficulty = settings.difficulty = key; saveSettings(); refresh(); });
     return card;
   }));
-  if (state.screen !== "setup") show("setup");
+}
+// The moves a difficulty can call, in the order they're listed in its config.
+export function moveList(level) {
+  return `<ul class="move-list">${level.moves.map((move) => `<li>${NAMES[move]}</li>`).join("")}</ul>`;
 }
 export function difficultyPips(level) {
   return `<span class="pips" data-level="${level}" aria-hidden="true"><i></i><i></i><i></i></span>`;

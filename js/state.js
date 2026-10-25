@@ -4,7 +4,7 @@ import { BOSSES, DIFFICULTIES, HEARTS, ROPE } from "./config.js";
 
 export const settings = loadSettings();
 export const state = {
-  screen: "menu", mode: "solo", exercise: "squats", bossIndex: 0,
+  screen: "menu", mode: "solo", bossIndex: 0,
   difficulty: Object.hasOwn(DIFFICULTIES, settings.difficulty) ? settings.difficulty : "normal",
   status: "idle", session: 0, stream: null, landmarker: null,
   modelPromise: null, raf: 0, tick: 0, countdownTimer: 0, alertTimer: 0,
@@ -22,7 +22,7 @@ export const solo = () => state.mode === "solo" || state.mode === "party";
 export const teamMode = () => state.mode === "coop" || state.mode === "party";
 export const isHost = () => state.mode === "party" && Boolean(state.party?.isHost);
 export const isGuest = () => state.mode === "party" && Boolean(state.party) && !state.party.isHost;
-export const playerCount = () => state.mode === "party" ? Math.max(1, state.roster.length) : state.mode === "coop" ? 2 : 1;
+export const playerCount = () => state.mode === "party" ? Math.max(1, state.roster.length) : state.mode === "coop" || state.mode === "duel" ? 2 : 1;
 export const boss = () => BOSSES[state.bossIndex];
 export const difficulty = () => DIFFICULTIES[state.difficulty];
 export const activeTrackers = () => state.trackers.slice(0, playerCount());

@@ -336,8 +336,7 @@ kbd {
   grid-template-columns: repeat(3, 1fr);
 }
 
-.choice,
-.exercise-card {
+.choice {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -353,11 +352,14 @@ kbd {
   transition: transform .08s steps(2), box-shadow .08s steps(2);
 }
 
-.choice:hover,
-.exercise-card:hover {
+.choice:hover {
   transform: translate(-2px, -2px);
   box-shadow: var(--drop-lift);
   border-color: var(--ui-accent);
+}
+
+.choice.difficulty {
+  justify-content: flex-start;
 }
 
 .choice.selected {
@@ -366,8 +368,7 @@ kbd {
   box-shadow: var(--drop), inset 0 0 0 2px var(--ui-accent);
 }
 
-.choice strong,
-.exercise-card strong {
+.choice strong {
   font: 32px var(--font-display);
   line-height: 1;
   color: var(--ui-accent-light);
@@ -382,6 +383,21 @@ kbd {
 }
 
 /* Difficulty level: three square pips, filled up to the level. */
+.move-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font: 18px/1.2 var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.choice.selected .move-list,
+.pick.selected .move-list {
+  color: var(--text-main);
+}
+
 .pips {
   display: flex;
   gap: 4px;
@@ -409,7 +425,8 @@ kbd {
   margin: 0;
 }
 
-#start-fight {
+#start-fight,
+#start-duel {
   display: block;
   width: 100%;
   margin-top: 32px;
@@ -480,16 +497,7 @@ kbd {
   margin: 0 0 16px;
 }
 
-.exercise-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
 
-.exercise-card {
-  min-height: 96px;
-  justify-content: flex-end;
-}
 
 .rules {
   padding-left: 28px;
@@ -1094,15 +1102,23 @@ kbd {
 
 .pick {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px 12px;
+  text-align: left;
   border: var(--stroke) solid var(--ui-border);
   background: var(--bg-base);
   box-shadow: var(--drop);
   font: 24px var(--font-display);
   text-transform: uppercase;
+}
+
+.pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .pick.selected {
@@ -1360,11 +1376,6 @@ kbd {
    Responsive
    ========================================================================== */
 
-@media (max-width: 900px) {
-  .exercise-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
 
 @media (max-width: 700px) {
   body {
@@ -1399,14 +1410,12 @@ kbd {
   }
 
   .difficulty-row,
-  .exercise-grid,
   .remote-grid,
   .lobby {
     grid-template-columns: 1fr;
   }
 
-  .choice,
-  .exercise-card {
+  .choice {
     min-height: 80px;
   }
 

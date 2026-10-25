@@ -150,6 +150,8 @@ export function renderSprite(container, b) {
 export function updateHud() {
   const duel = state.mode === "duel";
   if (duel) {
+    // Both duelists share a move, so the header names it.
+    $("game-title").textContent = NAMES[state.trackers[0].exercise] ?? "";
     $("p1-points").textContent = number(scoreText(state.scores[0]));
     $("p2-points").textContent = number(scoreText(state.scores[1]));
     $("rope-marker").style.left = `${50 - rope() * 50}%`;
