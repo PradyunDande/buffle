@@ -286,28 +286,31 @@ function renderTiles() {
   grid.classList.toggle("multi", others.length > 0);
   grid.classList.toggle("many", others.length >= 3);
   const keep = new Set(others.map((m) => m.id));
-  grid.querySelectorAll(".remote").forEach((tile) => { if (!keep.has(tile.dataset.peer)) tile.remove(); });
+  grid.querySelectorAll(".remote").forEach((tile) => { if (!keep.has(tile.dataset.peer)) tile.closest(".tile-wrap").remove(); });
   for (const member of others) {
     let tile = [...grid.querySelectorAll(".remote")].find((item) => item.dataset.peer === member.id);
     if (!tile) {
-      tile = document.createElement("div");
-      tile.className = "stage remote";
+      const wrap = document.createElement("div");
+      wrap.className = "tile-wrap";
+      wrap.innerHTML = `<div class="stage remote"><video autoplay playsinline></video><div class="camera-placeholder">Connecting camera…</div></div>`
+        + `<div class="tile-bar"><div class="tile-name"></div></div>`;
+      tile = wrap.querySelector(".remote");
       tile.dataset.peer = member.id;
-      tile.innerHTML = `<video autoplay playsinline></video><div class="camera-placeholder">Connecting camera…</div><div class="tile-name"></div>`;
-      addAudioControls(tile, member.id);
-      grid.append(tile);
+      addAudioControls(wrap, member.id);
+      grid.append(wrap);
     }
+    const wrap = tile.closest(".tile-wrap");
     const stream = state.remoteStreams.get(member.id) || null;
     const video = tile.querySelector("video");
     if (video.srcObject !== stream) {
       video.srcObject = stream;
-      if (stream) playWithSound(video, tile, member.id);
+      if (stream) playWithSound(video, wrap, member.id);
     }
     // A player without a camera can still be heard.
     const placeholder = tile.querySelector(".camera-placeholder");
     placeholder.hidden = Boolean(stream?.getVideoTracks().length);
     placeholder.textContent = stream ? "Camera off" : "Connecting camera…";
-    applyAudio(tile, member.id);
+    applyAudio(wrap, member.id);
   }
   updateTileNames();
 }
@@ -317,7 +320,7 @@ export function updateTileNames() {
   if (!party) return;
   const fighting = state.status !== "lobby";
   state.roster.forEach((member, i) => {
-    const label = (i === state.myIndex ? $("stage") : tileFor(i))?.querySelector(".tile-name");
+    const label = (i === state.myIndex ? $("stage") : tileFor(i))?.closest(".tile-wrap").querySelector(".tile-name");
     if (!label) return;
     const reps = isHost() ? state.trackers[i]?.reps ?? 0 : state.partyReps[i] ?? 0;
     const move = isHost() ? state.trackers[i]?.exercise : i === state.myIndex ? state.trackers[0].exercise : state.partyMoves[i];

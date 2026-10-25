@@ -58,8 +58,9 @@ export function updateMicButton() {
   button.setAttribute("aria-pressed", String(state.micMuted));
 }
 
-// Each remote tile carries its player's audio. Mute and volume are kept per player
-// for as long as they stay in the party.
+// Each remote tile carries its player's audio; its controls sit in the strip under
+// the camera. Mute and volume are kept per player for as long as they stay.
+// `tile` is the whole tile: the camera screen and the strip beneath it.
 function audioFor(id) {
   if (!state.remoteAudio.has(id)) state.remoteAudio.set(id, { muted: false, volume: 100, lastVolume: 100 });
   return state.remoteAudio.get(id);
@@ -83,7 +84,7 @@ export function addAudioControls(tile, id) {
     audio.muted = audio.volume === 0;
     applyAudio(tile, id);
   });
-  tile.append(controls);
+  tile.querySelector(".tile-bar").append(controls);
   applyAudio(tile, id);
 }
 export function applyAudio(tile, id) {
